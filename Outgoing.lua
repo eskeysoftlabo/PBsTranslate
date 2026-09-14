@@ -39,6 +39,17 @@
 --        then 1.5 s later IsVirtualKeyboardOnScreen and GetText  (0.4.12's calls, safe timing)
 --     8  7 after 300 ms                                          (0.4.12 exactly)
 --
+-- RESULT OF 6..8 ON PS5 (0.4.15): none crashed either; 0.4.12's crash did not reproduce.
+--
+-- 0.4.16: /en OPENS THE BOX AGAIN, THE WAY THAT RAN CLEAN
+--
+-- /en <日本語> opens the entry box with the English in it -- or with 翻訳不可 when nothing
+-- could be translated, so the player always sees that the command did something. It uses only
+-- what ran on PS5 without crashing: step 5's single StartTextEntry(text, ...) two seconds after
+-- the command, with no reads of the edit control or the input screen around it. The one part
+-- of 0.4.12 never re-run -- polling every 100 ms while the box was still open -- is gone: a box
+-- that is still open after the wait is left alone and the player is told.
+--
 -- Nothing here wraps or hooks client code.
 
 local addon = PBS_TRANSLATE_TEST
@@ -48,6 +59,9 @@ if not addon or not T or not T.TranslateJaToEn then
 end
 
 local OPEN_DELAY_MS = 2000
+
+-- What goes in the box when nothing could be translated.
+local UNTRANSLATABLE = "翻訳不可"
 local READ_DELAY_MS = 3000
 
 local outgoing = {}
@@ -227,7 +241,7 @@ function addon:OutgoingCommand(argumentString)
 	local argument = Trim(argumentString)
 
 	if argument == "" or argument == "help" then
-		Report("/en <日本語> -- 英訳をチャット欄に表示します（入力欄は開きません）")
+		Report("/en <日本語> -- 英訳を入れた状態で入力欄を開きます（送信は自分で）。訳せないときは「翻訳不可」")
 		Report("/en try 1〜8 -- 入力欄の動作確認。1から順に1つずつ実行してください")
 		return
 	end
@@ -253,17 +267,24 @@ function addon:OutgoingCommand(argumentString)
 	local ok, english, unknown = pcall(T.TranslateJaToEn, argument)
 	if not ok then
 		Report("translation error: %s", tostring(english))
-		return
+		english, unknown = "", {}
 	end
 	if #unknown > 0 then
 		Report("未対応の語: %s", table.concat(unknown, " / "))
 	end
-	if english == "" then
-		Report("英訳できませんでした。")
-		return
-	end
-	outgoing.last = english
-	Report("%s", english)
+	local text = english ~= "" and english or UNTRANSLATABLE
+	outgoing.last = text
+	-- Shown in chat as well, so the English is not lost if the box cannot open.
+	Report("%s", text)
+
+	Later(function()
+		local okOpen, opened, reason = pcall(OpenBox, text)
+		if not okOpen then
+			Report("入力欄を開けませんでした: %s", tostring(opened))
+		elseif not opened then
+			Report("入力欄を開けませんでした: %s", tostring(reason))
+		end
+	end, OPEN_DELAY_MS)
 end
 
 local function Install()

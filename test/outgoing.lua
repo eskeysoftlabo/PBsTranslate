@@ -93,20 +93,50 @@ do
 	check("unknown words reported", table.concat(unknown, "/"), "ケーキ/食べたい")
 end
 
--- ---- /en only translates -------------------------------------------------------------
+-- ---- /en opens the box with the English -----------------------------------------------
 check("/en registered", type(SLASH_COMMANDS["/en"]), "function")
 
 Reset()
 SLASH_COMMANDS["/en"]("チャルマン砦の正門が攻撃されている")
-RunTimers()
 check("/en prints the English", Lines():find("chal fd lit", 1, true) ~= nil, true)
-check("/en does not touch the chat box", #chat.calls, 0)
-check("/en schedules nothing", #timers, 0)
+check("/en waits before opening", #chat.calls, 0)
+check("/en schedules one open", #timers, 1)
+RunTimers()
+check("/en opens once", #chat.calls, 1)
+check("/en opens with the English", chat.calls[1] and chat.calls[1].text, "chal fd lit")
+check("/en passes dontShowHUDWindow", chat.calls[1] and chat.calls[1].dontShow, true)
+check("/en box holds the English", edit.text, "chal fd lit")
+check("/en schedules nothing after opening", #timers, 0)
 
 Reset()
 SLASH_COMMANDS["/en"]("ケーキを食べたい")
-check("untranslatable explained", Lines():find("英訳できませんでした", 1, true) ~= nil, true)
+RunTimers()
+check("untranslatable opens with 翻訳不可", chat.calls[1] and chat.calls[1].text, "翻訳不可")
 check("untranslatable words listed", Lines():find("ケーキ / 食べたい", 1, true) ~= nil, true)
+
+Reset()
+SLASH_COMMANDS["/en"]("ありがとう、ケーキ")
+RunTimers()
+check("partly translated opens with the English part", chat.calls[1] and chat.calls[1].text, "ty")
+check("partly translated lists the rest", Lines():find("未対応の語: ケーキ", 1, true) ~= nil, true)
+
+-- A box still open after the wait is left alone, not polled or reopened.
+Reset()
+chat.open = true
+SLASH_COMMANDS["/en"]("ありがとう")
+RunTimers()
+check("still-open box not reopened", #chat.calls, 0)
+check("still-open box reported", Lines():find("入力欄を開けませんでした: the chat box is still open", 1, true) ~= nil, true)
+check("still-open box not polled", #timers, 0)
+
+Reset()
+chat.fail = true
+local okFail = pcall(function()
+	SLASH_COMMANDS["/en"]("ありがとう")
+	RunTimers()
+end)
+check("/en open error contained", okFail, true)
+check("/en open error reported", Lines():find("入力欄を開けませんでした: ", 1, true) ~= nil, true)
 
 -- ---- /en try N: one more call per step --------------------------------------------------
 local function Try(step)
