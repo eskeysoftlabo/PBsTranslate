@@ -182,7 +182,7 @@ local function ParseLine(pos, line)
 		-- A "na" entry that is really a verb form or a noun with の (乾いた, できる, 魔法の)
 		-- neither takes な in front of a noun nor です after it; see T.Copula.
 		local last = entry.ja:sub(-3)
-		if entry.class == "na" and (last == "た" or last == "る" or last == "の" or last == "な") then
+		if entry.class == "na" and (last == "た" or last == "だ" or last == "る" or last == "の" or last == "な") then
 			entry.class = "rel"
 		end
 	elseif pos == "prep" then

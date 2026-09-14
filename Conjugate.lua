@@ -217,6 +217,9 @@ function T.RelativePredicate(word, form)
 	local last = word:sub(-3)
 	if last == "た" then
 		return Masu(word:sub(1, -4) .. "てい", form.past, form.negative)
+	elseif last == "だ" then
+		-- 富んだ -> 富んでいます
+		return Masu(word:sub(1, -4) .. "でい", form.past, form.negative)
 	elseif last == "る" then
 		local tail = word:sub(-6)
 		if tail == "する" then

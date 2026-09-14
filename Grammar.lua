@@ -97,6 +97,13 @@ local NUMBER_WORDS = {
 	nine = "9", ten = "10", a = "1", several = "数", few = "数", many = "何",
 }
 
+-- Verbs whose "to + verb" is a purpose even with nothing else in between: "came to help"
+local MOTION_VERBS = {
+	come = true, go = true, ["return"] = true, run = true, hurry = true, stop = true, visit = true,
+	stay = true, travel = true, walk = true, drive = true, fly = true, move = true, work = true,
+	study = true, save = true, arrive = true, leave = true, gather = true, meet = true, wait = true,
+}
+
 local PLACING_VERBS = { put = true, drop = true, place = true, set = true, stack = true, go = true, port = true, ["drop siege"] = true, ["set up siege"] = true }
 
 local PERSON_PRONOUNS = { i = true, you = true, we = true, they = true, he = true, she = true }
@@ -116,6 +123,34 @@ local INTRANSITIVE = {
 	["落とす"] = { ja = "落ちる", class = "1" },
 	["消す"] = { ja = "消える", class = "1" },
 	["見つける"] = { ja = "見つかる", class = "5" },
+	["増やす"] = { ja = "増える", class = "1" },
+	["減らす"] = { ja = "減る", class = "5" },
+	["上げる"] = { ja = "上がる", class = "5" },
+	["下げる"] = { ja = "下がる", class = "5" },
+	["広げる"] = { ja = "広がる", class = "5" },
+	["集める"] = { ja = "集まる", class = "5" },
+	["伝える"] = { ja = "伝わる", class = "5" },
+	["終える"] = { ja = "終わる", class = "5" },
+	["動かす"] = { ja = "動く", class = "5" },
+	["育てる"] = { ja = "育つ", class = "5" },
+	["起こす"] = { ja = "起きる", class = "1" },
+	["治す"] = { ja = "治る", class = "5" },
+	["並べる"] = { ja = "並ぶ", class = "5" },
+	["回す"] = { ja = "回る", class = "5" },
+	["出す"] = { ja = "出る", class = "1" },
+	["入れる"] = { ja = "入る", class = "5" },
+	["溶かす"] = { ja = "溶ける", class = "1" },
+	["燃やす"] = { ja = "燃える", class = "1" },
+	["流す"] = { ja = "流れる", class = "1" },
+	["冷やす"] = { ja = "冷える", class = "1" },
+	["温める"] = { ja = "温まる", class = "5" },
+	["乾かす"] = { ja = "乾く", class = "5" },
+	["高める"] = { ja = "高まる", class = "5" },
+	["強める"] = { ja = "強まる", class = "5" },
+	["弱める"] = { ja = "弱まる", class = "5" },
+	["改善する"] = { ja = "改善する", class = "s" },
+	["延長する"] = { ja = "延びる", class = "1" },
+	["拡大する"] = { ja = "拡大する", class = "s" },
 }
 
 local REQUEST_SUBJECTS = { you = true, someone = true, somebody = true, anyone = true, anybody = true }
@@ -1237,7 +1272,7 @@ function Clause:Translate(options)
 
 		if item.kind == "punct" then
 			i = i + 1
-		elseif (pos == "prep" or w == "to") and not item.phrase and w ~= nil then
+		elseif (pos == "prep" or w == "to") and w ~= nil then
 			self:Count(item)
 			if w == "to" and self:IsVerb(i + 1) then
 				-- "came to help you" -> あなたを手伝うために
@@ -1249,7 +1284,26 @@ function Clause:Translate(options)
 				local ja = purpose:TranslateBare({ plain = true })
 				self.known = self.known + purpose.known
 				self.unknown = self.unknown + purpose.unknown
-				phrases[#phrases + 1] = ja .. "ために"
+				if verbItem and not MOTION_VERBS[verbItem.base] and #objects == 0 and not embedded then
+					-- "decided to postpone the meeting" -> 会議を延期することを決めました
+					local particle = verbItem.entry.particle
+						or ((verbItem.entry.class == "i" or verbItem.entry.class == "na") and "が" or "を")
+					embedded = ja .. "こと" .. particle
+				elseif not verbItem and complement and not complement.adjective and complement.ja ~= ""
+					and subject and subject.pronoun == "it" then
+					-- "it is time to go" -> 行く時間です
+					complement = { ja = ja .. complement.ja, head = complement.head }
+					subject = nil
+				elseif not verbItem and (isCopula or complement) and subject and subject.pronoun == "it" then
+					-- "it is difficult to predict the outcome" -> 結果を予測するのは難しいです
+					subject = { ja = ja .. "の" }
+				elseif not verbItem and (isCopula or complement) then
+					-- "she was reluctant to accept" -> 受け入れるのに気が進まなかった
+					phrases[#phrases + 1] = ja .. "のに"
+				else
+					-- "came to help you" -> あなたを手伝うために
+					phrases[#phrases + 1] = ja .. "ために"
+				end
 				i = #items + 1
 			elseif self:IsNounPhraseStart(i + 1) then
 				local np, nextIndex = self:NounPhrase(i + 1)
@@ -1597,6 +1651,11 @@ function Clause:TranslateBare(form)
 				local np, nextIndex = tail:NounPhrase(i + 1)
 				objects[#objects + 1] = np.ja .. item.entry.ja
 				i = nextIndex
+			elseif item.kind == "word" and item.entry and item.entry.pos == "adv" then
+				-- "to meet tomorrow" -> 明日会う: adverbs go in front
+				tail:Count(item)
+				table.insert(objects, 1, item.entry.ja)
+				i = i + 1
 			else
 				if item.kind == "word" then
 					tail:Count(item)

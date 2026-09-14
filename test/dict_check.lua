@@ -120,7 +120,7 @@ local function CheckEntry(dictionary, key, entry)
 	elseif entry.pos == "a" then
 		if entry.class == "i" and Last(ja) ~= "い" then
 			Err(where, "i-adjective must end in い: " .. ja)
-		elseif entry.class == "na" and (Last(ja) == "だ" or ja:sub(-6) == "です") then
+		elseif entry.class == "na" and ja:sub(-6) == "です" then
 			Err(where, "na-adjective must not end in だ/です: " .. ja)
 		end
 		local ok, result = pcall(T.Copula, ja, entry.class, { negative = true, past = true })
