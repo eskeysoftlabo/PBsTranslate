@@ -401,7 +401,7 @@ local function Join(parts, separator)
 			if out ~= "" then
 				if separator then
 					out = out .. separator
-				elseif out:sub(-1):match("[%w%]]") and part:sub(1, 1):match("[%w|%[]") then
+				elseif out:sub(-1):match("[A-Za-z0-9%]]") and part:sub(1, 1):match("[A-Za-z0-9|%[]") then
 					out = out .. " "
 				end
 			end
@@ -484,7 +484,7 @@ function Clause:Count(item)
 	end
 	if item.entry or IsGrammarWord(item.w) or CONJUNCTIONS[item.w] then
 		self.known = self.known + 1
-	elseif item.orig and item.orig:match("^%u") and not item.sentenceStart then
+	elseif item.orig and item.orig:match("^[A-Z]") and not item.sentenceStart then
 		-- A capitalised word we do not know is most likely a name. It is neither evidence
 		-- that the line is English nor evidence that it is not.
 	else

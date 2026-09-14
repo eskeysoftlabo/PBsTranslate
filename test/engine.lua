@@ -7,6 +7,7 @@ local HERE = (debug.getinfo(1, "S").source:match("^@(.*)/") or ".")
 local DIR = HERE .. "/.."
 
 ENGINE_FILES = {
+	"Text.lua",
 	"Conjugate.lua",
 	"Lexicon.lua",
 	"Tokenizer.lua",

@@ -77,9 +77,12 @@ end
 
 local PREFIX = "|cFF69B4[en]|r "
 
+-- Every line goes through the UTF-8 check: invalid bytes handed to the chat window are the
+-- likely cause of the 0.4.16 crash (see Text.lua).
 local function Report(format, ...)
 	local ok, text = pcall(string.format, format, ...)
-	Say(PREFIX .. (ok and text or format))
+	local line = T.SanitizeUTF8(ok and text or format)
+	Say(PREFIX .. line)
 end
 
 local function Later(fn, ms)
@@ -234,7 +237,7 @@ local STEPS = {
 -- ---------------------------------------------------------------------------------------
 
 local function Trim(text)
-	return (tostring(text or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+	return T.Trim(text)
 end
 
 function addon:OutgoingCommand(argumentString)
@@ -246,7 +249,7 @@ function addon:OutgoingCommand(argumentString)
 		return
 	end
 
-	local step = argument:match("^try%s+(%d)$")
+	local step = argument:match("^try +([0-9])$")
 	if step then
 		local run = STEPS[tonumber(step)]
 		if not run then
@@ -264,15 +267,36 @@ function addon:OutgoingCommand(argumentString)
 		return
 	end
 
+	if argument == "probe" then
+		local probe = T.ProbeLocale()
+		Report("locale: E3 letter=%s alnum=%s | A0 space=%s | 85 space=%s | C3 upper=%s lowerChanges=%s",
+			tostring(probe.alphaE3), tostring(probe.alnumE3), tostring(probe.spaceA0), tostring(probe.space85),
+			tostring(probe.upperC3), tostring(probe.lowerChangesC3))
+		local english, unknown = T.TranslateJaToEn("ケーキを食べたい")
+		local valid = T.IsValidUTF8(english)
+		for _, piece in ipairs(unknown) do
+			valid = valid and T.IsValidUTF8(piece)
+		end
+		Report("untranslatable sample: english=%s pieces=%d valid=%s", english == "" and "empty" or "NOT EMPTY",
+			#unknown, tostring(valid))
+		return
+	end
+
 	local ok, english, unknown = pcall(T.TranslateJaToEn, argument)
 	if not ok then
 		Report("translation error: %s", tostring(english))
 		english, unknown = "", {}
 	end
+	-- Never hand the client broken UTF-8, whatever the translator produced.
+	local dropped
+	english, dropped = T.SanitizeUTF8(english)
+	if dropped then
+		english = ""
+	end
 	if #unknown > 0 then
 		Report("未対応の語: %s", table.concat(unknown, " / "))
 	end
-	local text = english ~= "" and english or UNTRANSLATABLE
+	local text = english:find("[A-Za-z0-9]") and english or UNTRANSLATABLE
 	outgoing.last = text
 	-- Shown in chat as well, so the English is not lost if the box cannot open.
 	Report("%s", text)

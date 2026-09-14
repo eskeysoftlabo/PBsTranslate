@@ -180,9 +180,9 @@ function T.JaSegment(text)
 			i = i + #matched.key
 		else
 			local c = text:sub(i, i)
-			if c:match("[%w%+%-]") then
+			if c:match("[A-Za-z0-9%+%-]") then
 				-- ASCII words pass through as themselves: "vMA", "2", "x"
-				local run = text:match("^[%w%+%-]+", i)
+				local run = text:match("^[A-Za-z0-9%+%-]+", i)
 				pieces[#pieces + 1] = { kind = "ascii", key = run, value = run }
 				i = i + #run
 			else
@@ -245,7 +245,7 @@ function T.TranslateJaToEn(text)
 			end
 			phrase, place, placeWord = {}, nil, nil
 			local english = piece.value:gsub("{np}", np) .. extra
-			english = english:gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+			english = english:gsub("^ +", ""):gsub(" +$", ""):gsub(" +", " ")
 			-- "to" or "at" with nothing after it: "omw to" -> "omw"
 			english = english:gsub(" to$", ""):gsub(" at$", "")
 			english = english:gsub(" at here", " here"):gsub(" to here", " here"):gsub(" at there", " there"):gsub(" to there", " there")

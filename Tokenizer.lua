@@ -54,7 +54,7 @@ local N_T_BASE = { ca = "can", wo = "will", sha = "shall" }
 
 local function PushWords(tokens, phrase, orig)
 	local first = true
-	for word in phrase:gmatch("%S+") do
+	for word in phrase:gmatch("[^ \t\r\n]+") do
 		tokens[#tokens + 1] = { kind = "word", w = word, orig = first and orig or word }
 		first = false
 	end
@@ -62,9 +62,9 @@ end
 
 -- One word as typed, possibly with an apostrophe, into one or more word tokens.
 local function PushWord(tokens, orig)
-	local lower = orig:lower()
+	local lower = T.Lower(orig)
 
-	local head, tail = lower:match("^(.-)'(%a*)$")
+	local head, tail = lower:match("^(.-)'([A-Za-z]*)$")
 	if head and head ~= "" then
 		if lower == "let's" then
 			PushWords(tokens, "let's", orig)
@@ -142,19 +142,19 @@ function T.Tokenize(text)
 					i = i + 1
 				end
 			end
-		elseif c:match("%s") then
+		elseif c:match("[ \t\r\n]") then
 			i = i + 1
-		elseif c:match("%a") then
-			local word = text:match("^%a[%w]*'%a+", i) or text:match("^%a[%w]*", i)
+		elseif c:match("[A-Za-z]") then
+			local word = text:match("^[A-Za-z][A-Za-z0-9]*'[A-Za-z]+", i) or text:match("^[A-Za-z][A-Za-z0-9]*", i)
 			PushWord(tokens, word)
 			i = i + #word
-		elseif c:match("%d") then
-			local word = text:match("^%d+%a[%w]*", i)
+		elseif c:match("[0-9]") then
+			local word = text:match("^[0-9]+[A-Za-z][A-Za-z0-9]*", i)
 			if word then
 				PushWord(tokens, word)
 				i = i + #word
 			else
-				local number = text:match("^%d+[%.,]?%d*", i)
+				local number = text:match("^[0-9]+[%.,]?[0-9]*", i)
 				if number:sub(-1) == "." or number:sub(-1) == "," then
 					number = number:sub(1, -2)
 				end
@@ -167,7 +167,7 @@ function T.Tokenize(text)
 			local mark = run:find("?", 1, true) and "?" or run:sub(1, 1)
 			tokens[#tokens + 1] = { kind = "punct", v = mark }
 			i = i + #run
-		elseif c == "-" and #tokens > 0 and tokens[#tokens].kind == "word" and text:sub(i + 1, i + 1):match("%a") then
+		elseif c == "-" and #tokens > 0 and tokens[#tokens].kind == "word" and text:sub(i + 1, i + 1):match("[A-Za-z]") then
 			-- well-known, re-roll: read as two words.
 			i = i + 1
 		elseif c == "'" or c == "\"" or c == "(" or c == ")" or c == "*" or c == "~" then
@@ -175,7 +175,7 @@ function T.Tokenize(text)
 		else
 			-- Anything else -- another script, an emoji, a symbol -- stays as typed. Runs of it
 			-- are kept together so a Japanese word is not cut into bytes.
-			local run = text:match("^[^%s%w|%.!%?,;:]+", i) or c
+			local run = text:match("^[^ \t\r\nA-Za-z0-9|%.!%?,;:]+", i) or c
 			tokens[#tokens + 1] = { kind = "raw", v = run }
 			i = i + #run
 		end

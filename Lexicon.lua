@@ -40,7 +40,7 @@ T.entryCount = T.entryCount or 0
 local lexicon = T.lexicon
 
 local function Trim(text)
-	return (text:gsub("^%s+", ""):gsub("%s+$", ""))
+	return (text:gsub("^[ \t\r\n]+", ""):gsub("[ \t\r\n]+$", ""))
 end
 
 -- One "english=japanese/field/field" line into an entry. Returns key, entry or nil.
@@ -49,7 +49,7 @@ local function ParseLine(pos, line)
 	if line == "" then
 		return nil
 	end
-	local english, rest = line:match("^(.-)%s*=%s*(.+)$")
+	local english, rest = line:match("^(.-)[ \t]*=[ \t]*(.+)$")
 	if not english or english == "" then
 		return nil
 	end
@@ -95,7 +95,7 @@ local function ParseLine(pos, line)
 			end
 		end
 	end
-	return english:lower():gsub("%s+", " "), entry
+	return (T.Lower(english):gsub("[ \t\r\n]+", " ")), entry
 end
 
 -- A word defined under two parts of speech keeps both: the later one is the default and the
@@ -158,9 +158,9 @@ end
 function T.DefineIrregular(block)
 	for line in (block .. "\n"):gmatch("(.-)\r?\n") do
 		line = Trim((line:gsub("%-%-.*$", "")))
-		local form, base, inflection = line:match("^(%S+)%s*=%s*(%S+)%s+(%S+)$")
+		local form, base, inflection = line:match("^([^ \t=]+)[ \t]*=[ \t]*([^ \t]+)[ \t]+([^ \t]+)$")
 		if form then
-			T.irregular[form:lower()] = { base = base:lower(), inflection = inflection }
+			T.irregular[T.Lower(form)] = { base = T.Lower(base), inflection = inflection }
 		end
 	end
 end
@@ -173,7 +173,7 @@ function T.SetUserEntries(entries)
 	T.userLexicon = {}
 	for english, value in pairs(entries or {}) do
 		if type(english) == "string" and type(value) == "string" then
-			local pos, rest = value:match("^(%a+):(.+)$")
+			local pos, rest = value:match("^([A-Za-z]+):(.+)$")
 			if not pos then
 				pos, rest = "x", value
 			end

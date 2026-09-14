@@ -211,5 +211,45 @@ SLASH_COMMANDS["/en"]("try 9")
 RunTimers()
 check("unknown step does nothing", #chat.calls, 0)
 
+-- ---- /en probe ------------------------------------------------------------------------
+Reset()
+SLASH_COMMANDS["/en"]("probe")
+check("probe reports the locale", Lines():find("locale: E3 letter=", 1, true) ~= nil, true)
+check("probe reports the sample", Lines():find("untranslatable sample: english=empty pieces=2 valid=true", 1, true) ~= nil, true)
+check("probe opens nothing", #chat.calls, 0)
+
+-- ---- a console-like locale --------------------------------------------------------------
+-- In a Latin-1 ctype locale 0xE3 is a letter, which is what broke untranslatable Japanese on
+-- PS5 in 0.4.16. Everything below must hold there too. Skipped where the locale is missing.
+-- (LuaJIT's patterns ignore the locale, so there the section is skipped too.)
+if os and os.setlocale and os.setlocale("en_US.ISO8859-1", "ctype") and string.char(0xE3):find("%a") then
+	for _, text in ipairs({ "ケーキを食べたい", "今日はだめだ", "ぅぁ、だ", "チャルマン砦の正門が攻撃されている", "ありがとう、ケーキ" }) do
+		local english, unknown = T.TranslateJaToEn(text)
+		local valid = T.IsValidUTF8(english)
+		for _, piece in ipairs(unknown) do valid = valid and T.IsValidUTF8(piece) end
+		check("Latin-1: valid UTF-8 for " .. text, valid, true)
+	end
+	check("Latin-1: untranslatable stays empty", (T.TranslateJaToEn("ケーキを食べたい")), "")
+	check("Latin-1: callout still translates", (T.TranslateJaToEn("チャルマン砦の正門が攻撃されている")), "chal fd lit")
+
+	Reset()
+	SLASH_COMMANDS["/en"]("ケーキを食べたい")
+	RunTimers()
+	check("Latin-1: untranslatable opens with 翻訳不可", chat.calls[1] and chat.calls[1].text, "翻訳不可")
+	check("Latin-1: every chat line is valid UTF-8", T.IsValidUTF8(Lines()), true)
+
+	Reset()
+	Speak(CHAT_CATEGORY_SAY, "@Someone", "今日はだめだ、ケーキを食べたい")
+	check("Latin-1: Japanese chat never produces invalid lines", T.IsValidUTF8(Lines()), true)
+	Speak(CHAT_CATEGORY_SAY, "@Someone", "thank you")
+	check("Latin-1: English chat still translated", Lines():find("ありがとう", 1, true) ~= nil, true)
+	os.setlocale("C", "ctype")
+end
+
+-- Sanitizer
+check("sanitize drops a cut character", (T.SanitizeUTF8("a" .. string.char(0xE3, 0x81) .. "b")), "ab")
+check("sanitize keeps valid text", (T.SanitizeUTF8("翻訳不可")), "翻訳不可")
+check("valid UTF-8 detects a stray continuation byte", T.IsValidUTF8(string.char(0xA0)), false)
+
 print(failures == 0 and "ALL PASS" or (failures .. " FAILED"))
 os.exit(failures == 0 and 0 or 1)

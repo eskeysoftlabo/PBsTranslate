@@ -209,7 +209,7 @@ function addon:TranslateLine(text)
 	if type(text) ~= "string" or text == "" then
 		return nil, "empty"
 	end
-	if not text:find("%a") then
+	if not text:find("[A-Za-z]") then
 		return nil, "no letters"
 	end
 
@@ -227,6 +227,10 @@ function addon:TranslateLine(text)
 	local percent = stats.known * 100 / total
 	if percent < (self.sv and self.sv.minKnownPercent or DEFAULTS.minKnownPercent) then
 		return nil, string.format("%d%% known", math.floor(percent))
+	end
+	-- Never hand the chat window broken UTF-8 (see Text.lua).
+	if not T.IsValidUTF8(ja) then
+		return nil, "invalid text"
 	end
 	-- Nothing but ASCII means nothing got translated: "vMA", a name, a number.
 	if not ContainsNonASCII(ja) then
@@ -492,19 +496,19 @@ function addon:AddUserWord(argument)
 		Print(GetString(SI_PBSTR_ERROR_ADD_FORMAT))
 		return
 	end
-	local pos = japanese:match("^(%a+):")
+	local pos = japanese:match("^([A-Za-z]+):")
 	if pos and not ({ n = true, v = true, a = true, adv = true, x = true, pn = true })[pos] then
 		Print(GetString(SI_PBSTR_ERROR_POS), pos)
 		return
 	end
-	english = english:lower():gsub("%s+", " ")
+	english = T.Lower(english):gsub("[ \t\r\n]+", " ")
 	self.sv.userWords[english] = japanese
 	self:ApplyUserWords()
 	Print(GetString(SI_PBSTR_REPLY_ADDED), english, japanese)
 end
 
 function addon:RemoveUserWord(argument)
-	local english = tostring(argument or ""):lower():gsub("^%s+", ""):gsub("%s+$", ""):gsub("%s+", " ")
+	local english = T.Trim(T.Lower(argument)):gsub("[ \t\r\n]+", " ")
 	if self.sv.userWords[english] == nil then
 		Print(GetString(SI_PBSTR_ERROR_NOT_FOUND), english)
 		return
@@ -617,7 +621,7 @@ local ON_WORDS = { on = true, ["true"] = true, yes = true, ["1"] = true }
 local OFF_WORDS = { off = true, ["false"] = true, no = true, ["0"] = true }
 
 local function ParseSwitch(word)
-	word = word and word:lower()
+	word = word and T.Lower(word)
 	if ON_WORDS[word] then
 		return true
 	elseif OFF_WORDS[word] then
@@ -630,7 +634,7 @@ end
 -- even under the known-words threshold, so it doubles as a way to see what the add-on makes
 -- of a sentence.
 function addon:TranslateCommand(argumentString)
-	local text = tostring(argumentString or ""):gsub("^%s+", ""):gsub("%s+$", "")
+	local text = T.Trim(argumentString)
 	if text == "" then
 		Print(GetString(SI_PBSTR_HELP_TRANSLATE))
 		return
@@ -648,8 +652,8 @@ end
 
 function addon:HandleCommand(argumentString)
 	local argument = tostring(argumentString or "")
-	local command, rest = argument:match("^%s*(%S+)%s*(.-)%s*$")
-	command = command and command:lower()
+	local command, rest = argument:match("^[ \t\r\n]*([^ \t\r\n]+)[ \t\r\n]*(.-)[ \t\r\n]*$")
+	command = command and T.Lower(command)
 
 	if not command or command == "status" then
 		self:PrintStatus()
@@ -707,7 +711,7 @@ function addon:HandleCommand(argumentString)
 	end
 	if command == "color" then
 		if rest ~= "" then
-			local color = rest:lower() == "default" and DEFAULTS.color or NormalizeColor(rest)
+			local color = T.Lower(rest) == "default" and DEFAULTS.color or NormalizeColor(rest)
 			if not color then
 				Print(GetString(SI_PBSTR_ERROR_COLOR))
 				return
