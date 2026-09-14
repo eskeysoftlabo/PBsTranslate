@@ -228,7 +228,7 @@ function addon:TranslateLine(text)
 	if percent < (self.sv and self.sv.minKnownPercent or DEFAULTS.minKnownPercent) then
 		return nil, string.format("%d%% known", math.floor(percent))
 	end
-	-- Never hand the chat window broken UTF-8 (see Text.lua).
+	-- Never hand the chat window broken UTF-8 (see Lexicon.lua, byte-safe text helpers).
 	if not T.IsValidUTF8(ja) then
 		return nil, "invalid text"
 	end

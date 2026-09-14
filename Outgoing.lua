@@ -78,7 +78,7 @@ end
 local PREFIX = "|cFF69B4[en]|r "
 
 -- Every line goes through the UTF-8 check: invalid bytes handed to the chat window are the
--- likely cause of the 0.4.16 crash (see Text.lua).
+-- likely cause of the 0.4.16 crash (see Lexicon.lua, byte-safe text helpers).
 local function Report(format, ...)
 	local ok, text = pcall(string.format, format, ...)
 	local line = T.SanitizeUTF8(ok and text or format)
