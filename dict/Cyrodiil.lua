@@ -16,6 +16,9 @@ local D = PBsTranslate.DefineCyrodiil
 
 D("n", [[
 -- keep structure
+ms=鉱山サイド/join=の
+ls=製材所サイド/join=の
+fs=農場サイド/join=の
 fd=正門/join=の
 front door=正門/join=の
 front gate=正門
