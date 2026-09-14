@@ -1,31 +1,37 @@
--- PB's TranslateTest -- /en: Japanese in, English into the chat entry box (prototype)
+-- PB's TranslateTest -- /en: Japanese to English for what the player sends (prototype)
 --
---   /en チャルマン砦の正門が攻撃されている   ->   the chat box opens holding "chal fd lit"
+--   /en チャルマン砦の正門が攻撃されている   ->   [en] chal fd lit
 --
--- An add-on cannot send chat. SendChatMessage is *private* (ESOUIDocumentation.txt), so the
--- one call that sends is out of reach, and the player presses send. What an add-on can do is
--- open the entry box with text already in it: SharedChatSystem:StartTextEntry(text, ...)
--- hands the text to TextEntry:Open, which puts it in the edit control.
+-- An add-on cannot send chat: SendChatMessage is *private* (ESOUIDocumentation.txt). The plan
+-- was to open the chat entry box with the English already in it and let the player press send.
 --
--- The opening itself follows PB's ChatAssistant, which does it on PS5 today:
+-- THE CRASH
 --
---   * dontShowHUDWindow = true. ZO_GamepadChatSystem:StartTextEntry calls the private
---     SetSetting unless that flag is set, so the flag is the only way in -- and the window
---     work the flag skips is done here instead.
---   * after a wait. /en is itself typed into the chat box, and the slash command runs while
---     that box is closing. Reopening in the same frame gives the console no lost-and-regained
---     focus to raise its input screen for.
+-- On PS5, 0.4.12's /en crashed the game -- the whole client, not a Lua error, so nothing was
+-- left to read afterwards. That build did five things to the chat box in one go, from a
+-- zo_callLater callback 300 ms after the command:
 --
--- WHAT THIS PROTOTYPE IS FOR
+--   StartTextEntry(text, nil, nil, true) -> Maximize/FadeIn -> TakeFocus, then
+--   GetText, a possible SetText, and 1.5 s later IsVirtualKeyboardOnScreen and GetText again.
 --
--- Two things nobody has measured, and every /en prints a line that answers them:
+-- Only the plain open with no text has ever run on PS5 (PB's ChatAssistant does it every day).
+-- Which of the rest takes the client down cannot be worked out from a desk, and guessing costs
+-- another crash. So:
 --
---   1. Does the English survive into the console's input screen, or does the platform open
---      the screen empty?                                 -> "text=" and what the player sees
---   2. Does sending still work from a box an add-on opened with text in it, or does the game
---      refuse a private call on the way out?             -> "[en] sent" when the message echoes
+--   * /en now only translates and prints. Nothing touches the chat box.
+--   * /en try 1..5 each do exactly one more thing than the step before, safest first. The
+--     player runs them in order; the first one that crashes names the call.
 --
--- Everything is under pcall and nothing here wraps or hooks client code.
+--     1  open the box EMPTY, the ChatAssistant way                      (known to work on PS5)
+--     2  1, then 3 s later read IsVirtualKeyboardOnScreen               (ChatAssistant read it too)
+--     3  1, then 3 s later read the edit control's text (GetText)
+--     4  1, then 3 s later put "hello" in with SetText
+--     5  open the box WITH "hello" in it: StartTextEntry("hello", ...)  (what 0.4.12 did)
+--
+--   Each step waits 2 s before opening, well past the box the command was typed into, and
+--   prints what it is about to do before doing it.
+--
+-- Nothing here wraps or hooks client code.
 
 local addon = PBS_TRANSLATE_TEST
 local T = PBsTranslate
@@ -33,15 +39,10 @@ if not addon or not T or not T.TranslateJaToEn then
 	return
 end
 
-local DEFAULT_DELAY_MS = 300
-local REPORT_AFTER_MS = 1500
-local OPEN_RETRIES = 10
-local RETRY_MS = 100
+local OPEN_DELAY_MS = 2000
+local READ_DELAY_MS = 3000
 
-local outgoing = {
-	pending = nil,     -- the English we put in the box, until it echoes back as sent
-	lastReport = nil,
-}
+local outgoing = {}
 addon.outgoing = outgoing
 
 local function Say(text)
@@ -59,10 +60,12 @@ local function Report(format, ...)
 	Say(PREFIX .. (ok and text or format))
 end
 
-local function DelayMs()
-	local sv = addon.sv
-	local value = sv and tonumber(sv.outgoingDelayMs)
-	return value and value >= 0 and value or DEFAULT_DELAY_MS
+local function Later(fn, ms)
+	if type(zo_callLater) == "function" then
+		zo_callLater(fn, ms)
+	else
+		fn()
+	end
 end
 
 local function GetChat()
@@ -77,95 +80,99 @@ local function EditControlOf(chat)
 	return textEntry and type(textEntry.GetEditControl) == "function" and textEntry:GetEditControl() or nil
 end
 
-local function ReadEntry(chat)
-	local edit = EditControlOf(chat)
-	local open = chat and type(chat.IsTextEntryOpen) == "function" and chat:IsTextEntryOpen() or false
-	local text = edit and type(edit.GetText) == "function" and edit:GetText() or nil
-	local screen = type(IsVirtualKeyboardOnScreen) == "function" and IsVirtualKeyboardOnScreen() or nil
-	return open, text, screen
-end
-
--- Open the box with the text in it. Returns opened, reason.
-local function OpenWithText(text)
+-- Step 1: exactly PB's ChatAssistant OpenChatEntry, with the text argument passed through.
+-- Returns opened, reason.
+local function OpenBox(text)
 	local chat = GetChat()
 	if not chat or type(chat.StartTextEntry) ~= "function" then
 		return false, "no chat system"
 	end
+	if type(chat.IsTextEntryOpen) == "function" and chat:IsTextEntryOpen() then
+		return false, "the chat box is still open"
+	end
 	if type(chat.SetHUDEnabled) == "function" then
 		chat:SetHUDEnabled(true)
 	end
-
 	chat:StartTextEntry(text, nil, nil, true)
 	if type(chat.IsTextEntryOpen) ~= "function" or not chat:IsTextEntryOpen() then
 		return false, "StartTextEntry declined"
 	end
-
-	-- The window work dontShowHUDWindow skipped (see PB's ChatAssistant, OpenChatEntry).
 	if chat.isMinimized and type(chat.Maximize) == "function" then
 		chat:Maximize()
 	elseif chat.primaryContainer and type(chat.primaryContainer.FadeIn) == "function" then
 		chat.primaryContainer:FadeIn()
 	end
 	chat.shouldMinimizeAfterEntry = false
-
-	-- Open() only sets the text when the box was closed; set it again in case it was not.
 	local edit = EditControlOf(chat)
-	if edit then
-		if type(edit.GetText) == "function" and edit:GetText() ~= text and type(edit.SetText) == "function" then
-			edit:SetText(text)
-		end
-		if type(edit.TakeFocus) == "function" then
-			edit:TakeFocus()
-		end
+	if edit and type(edit.TakeFocus) == "function" then
+		edit:TakeFocus()
 	end
 	return true
 end
 
-local function Later(fn, ms)
-	if type(zo_callLater) == "function" then
-		zo_callLater(fn, ms)
-	else
-		fn()
-	end
-end
-
--- Wait for the box the command was typed into to finish closing, then open ours.
-local function OpenWhenFree(text, attempt)
-	attempt = attempt or 1
-	local chat = GetChat()
-	local busy = chat and type(chat.IsTextEntryOpen) == "function" and chat:IsTextEntryOpen()
-	if busy and attempt < OPEN_RETRIES then
-		Later(function()
-			OpenWhenFree(text, attempt + 1)
-		end, RETRY_MS)
-		return
-	end
-
-	local ok, opened, reason = pcall(OpenWithText, text)
+local function RunOpen(step, text)
+	Report("try %d: opening the chat box %s now", step, text and ("with \"" .. text .. "\"") or "empty")
+	local ok, opened, reason = pcall(OpenBox, text)
 	if not ok then
-		Report("open FAILED with an error: %s", tostring(opened))
-		return
+		Report("try %d: open error: %s", step, tostring(opened))
+		return false
 	end
 	if not opened then
-		Report("open declined: %s (busy=%s after %d tries)", tostring(reason), tostring(busy), attempt)
-		return
+		Report("try %d: open declined: %s", step, tostring(reason))
+		return false
 	end
-	outgoing.pending = text
-
-	local open, current, screen = ReadEntry(chat)
-	local firstText = current == text and "ok" or ("MISMATCH [" .. tostring(current) .. "]")
-	local firstScreen = tostring(screen)
-	Later(function()
-		local laterOpen, laterText, laterScreen = ReadEntry(GetChat())
-		outgoing.lastReport = {
-			open = open, text = firstText, screen = firstScreen,
-			laterOpen = laterOpen, laterText = laterText == text and "ok" or tostring(laterText), laterScreen = laterScreen,
-		}
-		Report("opened=%s text=%s screen=%s | %dms later: open=%s text=%s screen=%s",
-			tostring(open), firstText, firstScreen, REPORT_AFTER_MS,
-			tostring(laterOpen), outgoing.lastReport.laterText, tostring(laterScreen))
-	end, REPORT_AFTER_MS)
+	Report("try %d: opened", step)
+	return true
 end
+
+local STEPS = {
+	[1] = function()
+		RunOpen(1, nil)
+	end,
+	[2] = function()
+		if not RunOpen(2, nil) then
+			return
+		end
+		Later(function()
+			Report("try 2: reading IsVirtualKeyboardOnScreen now")
+			local ok, screen = pcall(function()
+				return type(IsVirtualKeyboardOnScreen) == "function" and IsVirtualKeyboardOnScreen()
+			end)
+			Report("try 2: screen=%s%s", tostring(screen), ok and "" or " (error)")
+		end, READ_DELAY_MS)
+	end,
+	[3] = function()
+		if not RunOpen(3, nil) then
+			return
+		end
+		Later(function()
+			Report("try 3: reading the edit control's text now")
+			local ok, text = pcall(function()
+				local edit = EditControlOf(GetChat())
+				return edit and edit:GetText()
+			end)
+			Report("try 3: text=[%s]%s", tostring(text), ok and "" or " (error)")
+		end, READ_DELAY_MS)
+	end,
+	[4] = function()
+		if not RunOpen(4, nil) then
+			return
+		end
+		Later(function()
+			Report("try 4: SetText(\"hello\") now")
+			local ok, err = pcall(function()
+				local edit = EditControlOf(GetChat())
+				if edit then
+					edit:SetText("hello")
+				end
+			end)
+			Report("try 4: done%s", ok and "" or (" (error: " .. tostring(err) .. ")"))
+		end, READ_DELAY_MS)
+	end,
+	[5] = function()
+		RunOpen(5, "hello")
+	end,
+}
 
 -- ---------------------------------------------------------------------------------------
 -- The command
@@ -179,68 +186,42 @@ function addon:OutgoingCommand(argumentString)
 	local argument = Trim(argumentString)
 
 	if argument == "" or argument == "help" then
-		Report("/en <日本語> -- 英訳して入力欄に入れます（送信は自分で）")
-		Report("/en test -- 英語の固定文 \"hello\" で入力欄を開きます（翻訳を使わない確認用）")
-		Report("/en delay <ms> -- 入力欄を開くまでの待ち時間（今: %d ms）", DelayMs())
+		Report("/en <日本語> -- 英訳をチャット欄に表示します（入力欄は開きません）")
+		Report("/en try 1〜5 -- 入力欄の動作確認。1から順に1つずつ実行してください")
 		return
 	end
 
-	local delay = argument:match("^delay%s+(%d+)$")
-	if delay then
-		if self.sv then
-			self.sv.outgoingDelayMs = tonumber(delay)
+	local step = argument:match("^try%s+(%d)$")
+	if step then
+		local run = STEPS[tonumber(step)]
+		if not run then
+			Report("/en try 1〜5")
+			return
 		end
-		Report("delay %d ms", DelayMs())
+		Report("try %s: starting in %d ms", step, OPEN_DELAY_MS)
+		Later(function()
+			local ok, err = pcall(run)
+			if not ok then
+				Report("try %s: error: %s", step, tostring(err))
+			end
+		end, OPEN_DELAY_MS)
 		return
 	end
 
-	local english
-	if argument == "test" then
-		english = "hello"
-	else
-		local ok, result, unknown = pcall(T.TranslateJaToEn, argument)
-		if not ok then
-			Report("translation error: %s", tostring(result))
-			return
-		end
-		if #unknown > 0 then
-			Report("未対応の語: %s", table.concat(unknown, " / "))
-		end
-		if result == "" then
-			Report("英訳できませんでした。入力欄は開きません。")
-			return
-		end
-		english = result
+	local ok, english, unknown = pcall(T.TranslateJaToEn, argument)
+	if not ok then
+		Report("translation error: %s", tostring(english))
+		return
 	end
-
-	-- Shown in chat as well, so the English is not lost if the box opens empty.
+	if #unknown > 0 then
+		Report("未対応の語: %s", table.concat(unknown, " / "))
+	end
+	if english == "" then
+		Report("英訳できませんでした。")
+		return
+	end
+	outgoing.last = english
 	Report("%s", english)
-	Later(function()
-		OpenWhenFree(english)
-	end, DelayMs())
-end
-
--- ---------------------------------------------------------------------------------------
--- Did it go out?
---
--- A sent message echoes back through the chat router with its raw text, like every other
--- message. When the raw text is what we put in the box and the sender is the player, the
--- send worked -- the answer to question 2 above.
--- ---------------------------------------------------------------------------------------
-
-local function OnFormattedChatMessage(_, _, _, fromDisplayName, rawMessageText)
-	local pending = outgoing.pending
-	if not pending or type(rawMessageText) ~= "string" then
-		return
-	end
-	local mine = type(GetDisplayName) == "function" and GetDisplayName() or nil
-	local fromMe = fromDisplayName == nil or fromDisplayName == mine
-		or (type(fromDisplayName) == "string" and mine and fromDisplayName:gsub("^@", "") == mine:gsub("^@", ""))
-	if fromMe and rawMessageText == pending then
-		outgoing.pending = nil
-		outgoing.sent = (outgoing.sent or 0) + 1
-		Report("sent: %s", pending)
-	end
 end
 
 local function Install()
@@ -251,11 +232,6 @@ local function Install()
 				Report("command error: %s", tostring(err))
 			end
 		end
-	end
-	if CHAT_ROUTER and type(CHAT_ROUTER.RegisterCallback) == "function" then
-		CHAT_ROUTER:RegisterCallback("FormattedChatMessage", function(...)
-			pcall(OnFormattedChatMessage, ...)
-		end)
 	end
 end
 
