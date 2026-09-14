@@ -246,6 +246,8 @@ TRANSLATION_CASES = {
 	{ "smurfs inc", "カバナントインカミング" },
 	{ "train inc fd", "正門にトレイン（大集団）インカミング" },
 	{ "roe inner 80%", "ローベック砦の内門80%" },
+	{ "vlast lit", "ヴラスタルスの街は攻撃されています" },
+	{ "hammy", "ヴォレンドラングを取得しました" },
 	{ "gf", "よい戦いでした" },
 	{ "Ich habe keine Zeit heute", "Ich habe keine Zeit heute" },
 	{ "こんにちは", "こんにちは" },
