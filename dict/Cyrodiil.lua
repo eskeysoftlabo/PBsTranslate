@@ -494,6 +494,7 @@ winters peak=ウィンターズ・ピークス基地
 winter 's peak=ウィンターズ・ピークス基地
 bruma=ブルーマの街
 vlastarus=ヴラスタルスの街
+vlast=ヴラスタルス
 vlas=ヴラスタルスの街
 cropsford=クロップスの街
 crops=クロップスの街
@@ -571,6 +572,7 @@ set up siege=攻城兵器を置く/5
 ]])
 
 D("x", [[
+hammy=ヴォレルドルングを取得した
 fd down=正門が破られました
 front door down=正門が破られました
 bd down=裏門が破られました
