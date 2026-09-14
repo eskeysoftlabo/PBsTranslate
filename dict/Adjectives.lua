@@ -1029,3 +1029,22 @@ circular=円形の/na
 beige=ベージュの/na
 homesick=ホームシックの/na
 ]])
+
+-- Online game slang (2026-09-15)
+D("a", [[
+tilted=イライラしている/na
+overtuned=強すぎる調整の/na
+undertuned=弱すぎる調整の/na
+sus=怪しい/i
+based=分かってる/na
+cringe=痛い/i
+bugged out=バグった/na
+hardstuck=抜け出せない/i
+braindead=頭を使わない/i
+sweaty=ガチすぎる/na
+full hp=体力満タンの/na
+on cd=クールタイム中の/na
+off cd=使用可能な/na
+pay to win=課金ゲーの/na
+free to play=無料で遊べる/na
+]])

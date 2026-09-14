@@ -222,7 +222,7 @@ crash=落ちる/1
 lag=ラグる/5
 disconnect=切断する/s
 dc=切断する/s
-afk=離席する/s
+afk=離席している/1
 port=ポートする/s
 teleport=テレポートする/s
 travel=移動する/s/に
@@ -1456,4 +1456,26 @@ wake up early=早起きする/s
 change trains=電車を乗り換える/1
 miss the train=電車に乗り遅れる/1
 miss the bus=バスに乗り遅れる/1
+]])
+
+-- Online game slang (2026-09-15)
+D("v", [[
+int=わざと死ぬ/5
+inting=わざと死んでいる/1
+botting=ボットを使っている/1
+flaming=暴言を吐いている/1
+tilt=イライラする/s
+ragequit=キレて抜ける/1
+rage quit=キレて抜ける/1
+smurfing=サブ垢で遊んでいる/1
+clutch=土壇場で決める/1
+carry me=キャリーする/s
+boost me=ブーストする/s
+power level=パワーレベリングする/s
+min max=極める/1
+ninja loot=横取りする/s
+body block=体で止める/1
+spawn camp=湧き待ちする/s
+dodge queue=キューを抜ける/1
+get carried=キャリーされる/1
 ]])
