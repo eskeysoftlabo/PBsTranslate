@@ -31,6 +31,14 @@
 --   Each step waits 2 s before opening, well past the box the command was typed into, and
 --   prints what it is about to do before doing it.
 --
+-- RESULT OF 1..5 ON PS5 (0.4.14): none crashed. So no single call is the cause, and what is
+-- left is how 0.4.12 combined them. Three further steps separate the two differences:
+--
+--     6  5, but after 300 ms instead of 2 s                     (0.4.12's timing, one call)
+--     7  0.4.12's calls after 2 s: open with text, GetText at once,
+--        then 1.5 s later IsVirtualKeyboardOnScreen and GetText  (0.4.12's calls, safe timing)
+--     8  7 after 300 ms                                          (0.4.12 exactly)
+--
 -- Nothing here wraps or hooks client code.
 
 local addon = PBS_TRANSLATE_TEST
@@ -125,6 +133,26 @@ local function RunOpen(step, text)
 	return true
 end
 
+-- 0.4.12's sequence after the open: GetText at once, then the screen state and GetText again.
+local function ReadLikeRelease(step)
+	local ok, text = pcall(function()
+		local edit = EditControlOf(GetChat())
+		return edit and edit:GetText()
+	end)
+	Report("try %d: text at once=[%s]%s", step, tostring(text), ok and "" or " (error)")
+	Later(function()
+		Report("try %d: reading screen state and text now", step)
+		local okRead, screen, later = pcall(function()
+			local edit = EditControlOf(GetChat())
+			return type(IsVirtualKeyboardOnScreen) == "function" and IsVirtualKeyboardOnScreen(), edit and edit:GetText()
+		end)
+		Report("try %d: screen=%s text=[%s]%s", step, tostring(screen), tostring(later), okRead and "" or " (error)")
+	end, 1500)
+end
+
+-- How long each step waits before opening. 6 and 8 use 0.4.12's 300 ms.
+local STEP_DELAY_MS = { [6] = 300, [8] = 300 }
+
 local STEPS = {
 	[1] = function()
 		RunOpen(1, nil)
@@ -172,6 +200,19 @@ local STEPS = {
 	[5] = function()
 		RunOpen(5, "hello")
 	end,
+	[6] = function()
+		RunOpen(6, "hello")
+	end,
+	[7] = function()
+		if RunOpen(7, "hello") then
+			ReadLikeRelease(7)
+		end
+	end,
+	[8] = function()
+		if RunOpen(8, "hello") then
+			ReadLikeRelease(8)
+		end
+	end,
 }
 
 -- ---------------------------------------------------------------------------------------
@@ -187,7 +228,7 @@ function addon:OutgoingCommand(argumentString)
 
 	if argument == "" or argument == "help" then
 		Report("/en <日本語> -- 英訳をチャット欄に表示します（入力欄は開きません）")
-		Report("/en try 1〜5 -- 入力欄の動作確認。1から順に1つずつ実行してください")
+		Report("/en try 1〜8 -- 入力欄の動作確認。1から順に1つずつ実行してください")
 		return
 	end
 
@@ -195,16 +236,17 @@ function addon:OutgoingCommand(argumentString)
 	if step then
 		local run = STEPS[tonumber(step)]
 		if not run then
-			Report("/en try 1〜5")
+			Report("/en try 1〜8")
 			return
 		end
-		Report("try %s: starting in %d ms", step, OPEN_DELAY_MS)
+		local delay = STEP_DELAY_MS[tonumber(step)] or OPEN_DELAY_MS
+		Report("try %s: starting in %d ms", step, delay)
 		Later(function()
 			local ok, err = pcall(run)
 			if not ok then
 				Report("try %s: error: %s", step, tostring(err))
 			end
-		end, OPEN_DELAY_MS)
+		end, delay)
 		return
 	end
 

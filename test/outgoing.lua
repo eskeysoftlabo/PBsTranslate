@@ -137,6 +137,20 @@ check("try 4 opened empty first", chat.calls[1] and chat.calls[1].text, nil)
 Try(5)
 check("try 5 opens with hello", chat.calls[1] and chat.calls[1].text, "hello")
 
+Try(6)
+check("try 6 opens with hello", chat.calls[1] and chat.calls[1].text, "hello")
+check("try 6 uses 300 ms", Lines():find("try 6: starting in 300 ms", 1, true) ~= nil, true)
+check("try 6 reads nothing back", Lines():find("text", 1, true) == nil, true)
+
+Try(7)
+check("try 7 uses 2000 ms", Lines():find("try 7: starting in 2000 ms", 1, true) ~= nil, true)
+check("try 7 reads text at once", Lines():find("try 7: text at once=[hello]", 1, true) ~= nil, true)
+check("try 7 reads screen and text later", Lines():find("try 7: screen=true text=[hello]", 1, true) ~= nil, true)
+
+Try(8)
+check("try 8 uses 300 ms", Lines():find("try 8: starting in 300 ms", 1, true) ~= nil, true)
+check("try 8 reads like 0.4.12", Lines():find("try 8: screen=true text=[hello]", 1, true) ~= nil, true)
+
 -- A box that is still open is not reopened on top of itself.
 Reset()
 chat.open = true
