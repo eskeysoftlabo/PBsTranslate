@@ -30,7 +30,7 @@ local NORMALIZE = {
 	wont = "will not", couldnt = "could not", shouldnt = "should not", wouldnt = "would not",
 	havent = "have not", hasnt = "has not", hadnt = "had not", mustnt = "must not",
 	thats = "that is", whats = "what is", wheres = "where is", hows = "how is", whos = "who is",
-	theres = "there is", heres = "here is", its = "it is", lets = "let's",
+	theres = "there is", heres = "here is", lets = "let's",
 	wanna = "want to", gonna = "going to", gotta = "have to", hafta = "have to",
 	u = "you", ur = "your", r = "are", ya = "you", yu = "you", pls = "please", plz = "please",
 	pl0x = "please", cuz = "because", coz = "because", bc = "because", cos = "because",

@@ -1,4 +1,4 @@
-# PB’s TranslateTest 0.4.18
+# PB’s TranslateTest 0.4.19
 
 チャット欄の英語の発言の下に、日本語訳を1行表示するESOアドオンです（自分の発言・他のプレイヤーの発言の両方）。
 
@@ -124,6 +124,8 @@ crown、zerg / ball group / bomber / ganker、ad / dc / ep、emp、scroll、ap /
 - 地名・ダンジョン名などの固有名詞の一部は日本語版の正式名称と異なる可能性があります
 
 ## テスト
+
+`lua test/dict_check.lua` は辞書の全項目を検査します（動詞の活用の種類と語尾の不一致、「い」で終わらないい形容詞、壊れた文字列など）。辞書を編集したら実行してください。
 
 ```bash
 lua test/run.lua

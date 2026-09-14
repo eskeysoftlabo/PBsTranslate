@@ -56,6 +56,10 @@ local REPORT_VERBS = {
 	think = true, guess = true, believe = true, hope = true, know = true, say = true, feel = true,
 	suppose = true, bet = true, hear = true, remember = true, forget = true, wonder = true,
 	understand = true, mean = true, heard = true, tell = true,
+	realize = true, realise = true, notice = true, admit = true, claim = true, explain = true,
+	mention = true, prove = true, discover = true, doubt = true, expect = true, imagine = true,
+	assume = true, recognize = true, predict = true, report = true, learn = true, find = true,
+	agree = true, insist = true, suggest = true, warn = true, promise = true,
 }
 
 -- Nouns for people and creatures take いる, everything else ある. Judged on the Japanese, so
@@ -87,6 +91,11 @@ local function IsAnimate(entry)
 	end
 	return false
 end
+
+local NUMBER_WORDS = {
+	one = "1", two = "2", three = "3", four = "4", five = "5", six = "6", seven = "7", eight = "8",
+	nine = "9", ten = "10", a = "1", several = "数", few = "数", many = "何",
+}
 
 local PLACING_VERBS = { put = true, drop = true, place = true, set = true, stack = true, go = true, port = true, ["drop siege"] = true, ["set up siege"] = true }
 
@@ -245,6 +254,40 @@ local function Tag(tokens)
 				if not IsGrammarWord(token.w) or HAVE[token.w] or DO[token.w] then
 					local entry, inflection, base = T.Lookup(token.w)
 					item.entry, item.infl, item.base = entry, inflection, base or token.w
+					-- "left" is a noun and leave's past; "saw" a noun and see's past.
+					local irregular = T.irregular[token.w]
+					if entry and not inflection and entry.pos ~= "v" and not (entry.alts and entry.alts.v) and irregular then
+						local verb = T.As(T.Exact(irregular.base), "v")
+						if verb then
+							local both = {}
+							for k, v in pairs(entry) do
+								both[k] = v
+							end
+							both.alts = {}
+							for k, v in pairs(entry.alts or {}) do
+								both.alts[k] = v
+							end
+							both.alts.v = verb
+							item.entry = both
+							item.altInflection = irregular.inflection
+							item.altBase = irregular.base
+						end
+					end
+					-- An irregular plural can also be a verb: "lives" is life's plural and live's
+					-- third person. Keep both readings and let the context choose.
+					if entry and inflection == "plural" and entry.pos == "n" and not (entry.alts and entry.alts.v) then
+						local word = token.w
+						local verb = T.As(T.Exact(word:sub(1, -2)), "v")
+							or (word:sub(-2) == "es" and T.As(T.Exact(word:sub(1, -3)), "v")) or nil
+						if verb then
+							local both = {}
+							for k, v in pairs(entry) do
+								both[k] = v
+							end
+							both.alts = { v = verb }
+							item.entry = both
+						end
+					end
 				end
 				items[#items + 1] = item
 				i = i + 1
@@ -320,6 +363,10 @@ local function Disambiguate(items)
 					or (following.entry and (T.As(following.entry, "n") or following.entry.pos == "det")))) then
 				-- "drop siege", "farm rss": a clause that opens on a verb with its object after it
 				wantPos = "v"
+			elseif item.infl == "plural" and entry.alts.v and previous and previous.kind == "word" and previous.entry
+				and (previous.entry.pos == "n" or SUBJECT_PRONOUNS[previous.w]) then
+				-- "my grandmother lives": a noun, then a plural that can be a verb
+				wantPos = "v"
 			elseif following and following.kind == "word" and OBJECT_PRONOUNS[following.w] and entry.alts.v then
 				-- "add me", "port us"
 				wantPos = "v"
@@ -336,6 +383,9 @@ local function Disambiguate(items)
 					wantPos = "a"
 				elseif ARTICLES[w] or w == "'s" or DEMONSTRATIVE_DET[w] then
 					wantPos = "n"
+				elseif (HAVE[w] or BE[w]) and (item.infl == "past" or item.infl == "ing") and (entry.pos == "v" or entry.alts.v) then
+					-- "has changed", "is changing": the participle, not the noun
+					wantPos = "v"
 				elseif SUBJECT_PRONOUNS[w] or MODALS[w] or VERB_CONTEXT_WORDS[w] or DO[w] then
 					wantPos = "v"
 				elseif previous.entry and NOUN_CONTEXT_POS[previous.entry.pos]
@@ -372,6 +422,9 @@ local function Disambiguate(items)
 					or (wantPos == "a" and (T.As(entry, "n") or (entry.pos == "x" and T.As(entry, "v")))) or nil
 				if alternative then
 					item.entry = alternative
+					if wantPos == "v" and item.altInflection then
+						item.infl, item.base = item.altInflection, item.altBase
+					end
 					if wantPos == "n" and item.infl == "third" then
 						item.infl = "plural"
 					elseif wantPos == "v" and item.infl == "plural" then
@@ -384,8 +437,31 @@ local function Disambiguate(items)
 	return items
 end
 
+-- "its" is the possessive before a noun ("its paintings") and chat's "it is" anywhere else
+-- ("its ok", "its broken", "its fine lol").
+local function ExpandIts(tokens)
+	local out = {}
+	for index, token in ipairs(tokens) do
+		local following = tokens[index + 1]
+		if token.kind == "word" and token.w == "its" then
+			local entry = following and following.kind == "word" and T.Lookup(following.w)
+			local possessive = entry and (entry.pos == "n" or (entry.alts and entry.alts.n))
+				and not (entry.pos == "a" or entry.pos == "x" or entry.pos == "adv")
+			if possessive then
+				out[#out + 1] = token
+			else
+				out[#out + 1] = { kind = "word", w = "it", orig = token.orig }
+				out[#out + 1] = { kind = "word", w = "is", orig = "is" }
+			end
+		else
+			out[#out + 1] = token
+		end
+	end
+	return out
+end
+
 T.Tag = function(tokens)
-	return Disambiguate(Tag(tokens))
+	return Disambiguate(Tag(ExpandIts(tokens)))
 end
 
 -- ---------------------------------------------------------------------------------------
@@ -577,6 +653,11 @@ function Clause:NounPhrase(i)
 		elseif entry and entry.pos == "det" and #parts > 0 and not self:IsNounPhraseStart(i + 1) then
 			-- "kill the adds first": a determiner with nothing after it is not one.
 			break
+		elseif entry and entry.pos == "det" and NUMBER_WORDS[w] and self:Entry(i + 1) and self:Entry(i + 1).time then
+			-- "two years" -> 2年, not 2つの年
+			self:Count(item)
+			parts[#parts + 1] = NUMBER_WORDS[w]
+			i = i + 1
 		elseif entry and entry.pos == "det" then
 			self:Count(item)
 			parts[#parts + 1] = entry.ja
@@ -759,6 +840,29 @@ function Clause:Auxiliary(i, form, state)
 			return true, i + 2
 		end
 		local nextItem = self.items[i + 1]
+		-- "have already won": look past adverbs for the participle
+		-- "have never seen", "have you ever been": experience -> ～たことがある
+		local k, experience = i + 1, false
+		while self.items[k + 1] and (self:Pos(k) == "adv" or NEGATORS[self:W(k) or ""] or SUBJECT_PRONOUNS[self:W(k) or ""]) do
+			if self:W(k) == "never" or self:W(k) == "ever" then
+				experience = true
+			end
+			k = k + 1
+		end
+		if experience and self.items[k] and self.items[k].w == "been" then
+			-- "have you ever been to Japan" -> 日本に行ったことがありますか
+			self.items[k] = { kind = "word", w = "been:go", orig = "been", infl = "past", base = "go",
+				entry = { pos = "v", ja = "行く", class = "5", particle = "に" } }
+		end
+		if k > i + 1 and self.items[k] and self.items[k].infl == "past" and self:IsVerb(k) then
+			self:Count(item)
+			if experience then
+				form.mode = form.mode or "experience"
+			else
+				form.past = true
+			end
+			return true, i + 1
+		end
 		if nextItem and nextItem.w == "been" then
 			-- "have been playing" is still going on: 遊んでいます
 			self:Count(item)
@@ -936,13 +1040,22 @@ function Clause:Translate(options)
 		end
 	end
 
-	-- Auxiliaries after the subject.
+	-- Auxiliaries after the subject, and the adverbs English puts among them:
+	-- "I usually get up", "we have already won", "I really want to go".
+	state.preAdverbs = {}
 	while true do
 		local handled, nextIndex = self:Auxiliary(i, form, state)
-		if not handled then
+		if handled then
+			i = nextIndex
+		elseif self:Pos(i) == "adv" and items[i + 1] and items[i + 1].kind == "word"
+			and (self:IsVerb(i + 1) or BE[self:W(i + 1)] or MODALS[self:W(i + 1)] or DO[self:W(i + 1)]
+				or HAVE[self:W(i + 1)] or NEGATORS[self:W(i + 1)] or self:Pos(i + 1) == "adv") then
+			self:Count(items[i])
+			state.preAdverbs[#state.preAdverbs + 1] = items[i].entry.ja
+			i = i + 1
+		else
 			break
 		end
-		i = nextIndex
 	end
 	if invertedAux and BE[self:W(invertedAux) or ""] then
 		state.be = true
@@ -1208,7 +1321,9 @@ function Clause:Translate(options)
 			self:Count(item)
 			adverbs[#adverbs + 1] = T.As(item.entry, "adv").ja
 			i = i + 1
-		elseif pos == "a" and item.infl == "adverb" then
+		elseif pos == "a" and (item.infl == "adverb" or (verbItem and not isCopula and not state.be
+			and not self:IsNounPhraseStart(i + 1) and #objects == 0)) then
+			-- "quickly", and a bare adjective after the verb: "get up early" -> 早く起きる
 			self:Count(item)
 			adverbs[#adverbs + 1] = AdverbFromAdjective(item.entry)
 			i = i + 1
@@ -1225,7 +1340,12 @@ function Clause:Translate(options)
 			i = i + 1
 		elseif self:IsNounPhraseStart(i) then
 			local np, nextIndex = self:NounPhrase(i)
-			if isCopula and not complement then
+			if np.head and np.head.time and self:W(nextIndex) == "ago" then
+				-- "two years ago" -> 2年前
+				self:Count(items[nextIndex])
+				table.insert(adverbs, 1, np.ja .. "前に")
+				nextIndex = nextIndex + 1
+			elseif isCopula and not complement then
 				complement = np
 			else
 				objects[#objects + 1] = np
@@ -1312,6 +1432,9 @@ function Clause:Translate(options)
 		out[#out + 1] = whJa .. "が"
 	end
 
+	for index = #(state.preAdverbs or {}), 1, -1 do
+		table.insert(adverbs, 1, state.preAdverbs[index])
+	end
 	for _, adverb in ipairs(adverbs) do
 		out[#out + 1] = adverb
 	end

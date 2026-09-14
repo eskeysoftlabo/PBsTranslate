@@ -367,13 +367,13 @@ end
 -- Look a single lower-case word up. Returns entry, inflection (or nil), base word.
 -- skipExact looks past an exact entry to the inflected reading ("understood" the expression
 -- -> "understand" past).
-function T.Lookup(word, skipExact)
+function T.Lookup(word, skipExact, skipIrregular)
 	local entry = not skipExact and Exact(word)
 	if entry then
 		return entry, nil, word
 	end
 
-	local irregular = T.irregular[word]
+	local irregular = not skipIrregular and T.irregular[word]
 	if irregular then
 		entry = Exact(irregular.base)
 		if entry then

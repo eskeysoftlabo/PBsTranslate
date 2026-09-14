@@ -346,6 +346,9 @@ function T.Predicate(entry, form)
 		return (negative and (NaiStem(word, class) .. "ない") or word) .. "かもしれません"
 	elseif mode == "likes" then
 		return word .. (negative and "のは好きではありません" or "のが好きです")
+	elseif mode == "experience" then
+		-- "have (never) seen" -> 見たことがあります / 見たことがありません
+		return T.PlainPredicate(entry, { past = true }) .. (negative and "ことがありません" or "ことがあります")
 	elseif mode == "passive" then
 		if not past then
 			-- "the keep is flipped" is a state: 奪われています
