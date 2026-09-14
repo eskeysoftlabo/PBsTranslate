@@ -360,7 +360,7 @@ function T.Predicate(entry, form)
 		return Masu(T.PassiveStem(word, class), past, negative)
 	end
 
-	if form.plain then
+	if form.plain or form.conditional then
 		return T.PlainPredicate(entry, form)
 	end
 

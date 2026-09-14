@@ -627,3 +627,87 @@ wildly=乱暴に
 willingly=喜んで
 wrongly=誤って
 ]])
+
+-- High-school vocabulary, part 3 (2026-09-15)
+D("adv", [[
+anyhow=とにかく
+besides=その上
+forward=前へ
+nowhere=どこにも
+either=どちらか
+neither=どちらも
+twice a week=週に2回
+once a week=週に1回
+all over the world=世界中で
+at home=家で
+at school=学校で
+at work=職場で
+on foot=歩いて
+by car=車で
+by bus=バスで
+by train=電車で
+on time=時間通りに
+in time=間に合って
+right away=すぐに
+at the same time=同時に
+little by little=少しずつ
+one by one=一人ずつ
+more and more=ますます
+over and over=何度も
+sooner or later=遅かれ早かれ
+after all=結局
+above all=何よりも
+in advance=前もって
+no longer=もはや
+not only=だけでなく
+as usual=いつものように
+on purpose=わざと
+by mistake=間違って
+by chance=偶然
+in public=人前で
+in person=直接
+in a hurry=急いで
+for free=無料で
+for sure=確かに
+at most=多くても
+at all=全く
+in total=合計で
+on average=平均して
+in common=共通して
+in the end=最後には
+in the middle=真ん中で
+in front=前に
+at the end=最後に
+at the beginning=初めに
+]])
+
+-- High-school vocabulary, part 3: prepositions
+D("prep", [[
+among=の間で
+beneath=の下に
+beside=のそばに
+beyond=の向こうに
+despite=にもかかわらず
+in spite of=にもかかわらず
+according to=によると
+regardless of=に関係なく
+instead of=の代わりに
+thanks to=のおかげで
+such as=のような
+as for=については
+apart from=を除いて
+along with=と一緒に
+except for=を除いて
+on behalf of=を代表して
+in terms of=の点で
+in case of=の場合は
+by means of=によって
+till=まで
+throughout=の至る所で
+within=以内に
+underneath=の下に
+opposite=の向かいに
+unlike=と違って
+concerning=に関して
+regarding=に関して
+]])

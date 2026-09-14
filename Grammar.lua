@@ -98,6 +98,10 @@ local NUMBER_WORDS = {
 }
 
 -- Verbs whose "to + verb" is a purpose even with nothing else in between: "came to help"
+-- Nouns that measure a span of time: "in 5 minutes" is 5分後に, "in April" is 4月に
+local DURATION_WORDS = { ["秒"] = true, ["分"] = true, ["時間"] = true, ["日"] = true, ["週"] = true,
+	["月"] = true, ["年"] = true, ["瞬間"] = true, ["10年間"] = true, ["世紀"] = true }
+
 local MOTION_VERBS = {
 	come = true, go = true, ["return"] = true, run = true, hurry = true, stop = true, visit = true,
 	stay = true, travel = true, walk = true, drive = true, fly = true, move = true, work = true,
@@ -173,6 +177,8 @@ local CONJUNCTIONS = {
 	although = { kind = "sub", form = {}, after = "が、" },
 	though = { kind = "sub", form = {}, after = "が、" },
 	["if"] = { kind = "sub", form = { conditional = true }, before = "もし", after = "、" },
+	-- "unless you hurry" -> 急がなかったら
+	unless = { kind = "sub", form = { conditional = true, negative = true }, after = "、" },
 	when = { kind = "sub", form = { plain = true }, after = "とき、" },
 	["while"] = { kind = "sub", form = { plain = true }, after = "間に、" },
 	["until"] = { kind = "sub", form = { plain = true }, after = "まで、" },
@@ -1317,6 +1323,15 @@ function Clause:Translate(options)
 				if w == "to" or (w == "by" and form.mode == "passive") then
 					particle = "に"
 				end
+				if w == "at" and np.ja:match("^[0-9]+$") then
+					-- "at 9" -> 9時に
+					np = { ja = np.ja .. "時", head = { time = true } }
+					particle = "に"
+				end
+				if (w == "on" or w == "in" or w == "at") and np.head and np.head.time then
+					-- "in April", "on Monday", "at night" -> 4月に
+					particle = "に"
+				end
 				if (w == "on" or w == "in" or w == "at") and verbItem and PLACING_VERBS[verbItem.base] then
 					-- "put oils on the fd" -> 正門に
 					particle = "に"
@@ -1342,7 +1357,7 @@ function Clause:Translate(options)
 				end
 				if not particle then
 					-- handled above
-				elseif w == "in" and np.head and np.head.time then
+				elseif w == "in" and np.head and DURATION_WORDS[np.head.ja] then
 					-- "in 5 minutes" -> 5分後に. Time goes first in a Japanese clause.
 					table.insert(phrases, 1, Join({ np.ja, "後に" }))
 					for index = #phrases, 2, -1 do

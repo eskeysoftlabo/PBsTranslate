@@ -1007,3 +1007,25 @@ worthless=価値のない/i
 worthwhile=価値のある/na
 zealous=熱心/na
 ]])
+
+-- High-school vocabulary, part 3 (2026-09-15)
+D("a", [[
+annual=毎年の/na
+blond=金髪の/na
+blonde=金髪の/na
+curly=巻き毛の/na
+skinny=やせた/na
+rainy=雨の/na
+snowy=雪の/na
+sunny=晴れた/na
+windy=風の強い/na
+foggy=霧の/na
+stormy=嵐の/na
+chilly=肌寒い/i
+muggy=蒸し暑い/i
+crispy=カリカリの/na
+triangular=三角の/na
+circular=円形の/na
+beige=ベージュの/na
+homesick=ホームシックの/na
+]])
