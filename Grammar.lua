@@ -376,6 +376,11 @@ local function IsPlaceName(ja)
 	return false
 end
 
+local DIRECTIONS = { north = true, south = true, east = true, west = true,
+	northern = true, southern = true, eastern = true, western = true }
+local STRUCTURES = { wall = true, door = true, gate = true, tower = true }
+local COMBAT_ACTIONS = { repair = true, heal = true, defend = true, attack = true, push = true,
+	retreat = true, stack = true, siege = true, rez = true, resurrect = true }
 local OBJECT_PRONOUNS = { me = true, us = true, him = true, them = true }
 local NOUN_CONTEXT_POS = { det = true, a = true, prep = true, v = true }
 local VERB_CONTEXT_WORDS = { to = true, ["not"] = true, ["let's"] = true, never = true, please = true }
@@ -383,6 +388,21 @@ local VERB_CONTEXT_WORDS = { to = true, ["not"] = true, ["let's"] = true, never 
 local function Disambiguate(items)
 	for index, item in ipairs(items) do
 		local entry = item.entry
+		local following = items[index + 1]
+		-- Negative determiners/pronouns are grammar, not stand-alone interjections.
+		-- Keep a user's explicit replacement authoritative.
+		if not T.userLexicon[item.w] then
+			if item.w == "no" and following and following.kind == "word" then
+				item.entry = { pos = "det", ja = "", negative = true }
+			elseif item.w == "nobody" or item.w == "nothing" then
+				item.entry = { pos = "pn", ja = item.w == "nobody" and "誰も" or "何も", negative = true }
+			elseif item.w == "enough" and following and T.As(following.entry, "n") then
+				item.entry = { pos = "det", ja = "十分な" }
+			elseif item.w == "more" and following and T.As(following.entry, "n") then
+				item.entry = { pos = "det", ja = "もっと" }
+			end
+			entry = item.entry
+		end
 		-- "thanks" is an expression; "he thanks you" is a verb. For an expression with no
 		-- alternative reading of its own, the inflected reading is the alternative.
 		if entry and entry.pos == "x" and not entry.alts and not item.phrase and item.w then
@@ -405,7 +425,12 @@ local function Disambiguate(items)
 			local wantPos
 			local atStart = not previous or previous.kind == "punct"
 				or (previous.kind == "word" and CONJUNCTIONS[previous.w])
-			if previous and previous.kind == "word" and previous.entry and previous.entry.pos == "n"
+			if item.infl == "ing" and previous and (previous.base == "keep" or previous.base == "stop") and T.As(entry, "v") then
+				wantPos = "v"
+			elseif following and following.kind == "word" and following.infl == "ing"
+				and (item.base == "keep" or item.base == "stop") and T.As(entry, "v") then
+				wantPos = "v"
+			elseif previous and previous.kind == "word" and previous.entry and previous.entry.pos == "n"
 				and following and following.kind == "word" and SUBJECT_ONLY_VERBS[following.w] and entry.alts.n then
 				-- "yellow zerg inc": still the subject noun phrase
 				wantPos = "n"
@@ -491,6 +516,18 @@ local function Disambiguate(items)
 					end
 				end
 			end
+		end
+		if not T.userLexicon[item.w] then
+			local previous, following = items[index - 1], items[index + 1]
+			if (item.base == "warden" or item.w == "warden") and not T.userLexicon.warden and T.lexicon.warden and (
+				previous and (previous.w == "a" or previous.kind == "num" or NUMBER_WORDS[previous.w])
+				or following and ({ healer = true, tank = true, dps = true, dd = true, build = true, class = true })[following.base or following.w]) then
+				item.entry = T.lexicon.warden
+			end
+			-- A complete action call between a place and a new modal clause stays a call.
+			local exact = T.Exact(item.w)
+			if exact and exact.pos == "x" and T.As(exact, "v") and previous and T.As(previous.entry, "n")
+				and following and MODALS[following.w] then item.entry = exact end
 		end
 	end
 	return items
@@ -673,15 +710,27 @@ function Clause:NounPhrase(i)
 		local item = items[i]
 		local w = item.kind == "word" and item.w or nil
 		local entry = item.entry
+		local numericWord = w and NUMBER_WORDS[w] and w ~= "a" and tonumber(NUMBER_WORDS[w])
+		if numericWord and (self:IsNounPhraseStart(i + 1) or self:W(i + 1) == "more") then
+			item = { kind = "num", v = NUMBER_WORDS[w] }
+			self:Count(items[i])
+		end
 
-		if item.kind == "num" then
+		if item.kind == "num" and info.countSuffix and self:Entry(i + 1)
+			and self:Pos(i + 1) == "n" and not self:Entry(i + 1).unit and not self:Entry(i + 1).time then
+			-- "1 tank 2 dps": a fresh quantity starts the next member of a list.
+			break
+		elseif item.kind == "num" then
 			self:Count(item)
 			if self:W(i + 1) == "more" then
-				-- "2 more dps" -> あと2 DPS
 				self:Count(items[i + 1])
-				-- "2 more dps" -> あと2 DPS; "need 2 more" -> あと2人
-				local counter = self:IsNounPhraseStart(i + 2) and "" or "人"
-				parts[#parts + 1] = "あと" .. item.v .. counter
+				-- Keep both role and quantity together: "two more healers".
+				if self:Pos(i + 2) == "n" then
+					parts[#parts + 1] = "あと"
+					info.countSuffix = "×" .. item.v
+				else
+					parts[#parts + 1] = "あと" .. item.v .. "人"
+				end
 				i = i + 2
 			else
 				local nextEntry = self:Entry(i + 1)
@@ -721,8 +770,9 @@ function Clause:NounPhrase(i)
 			parts[#parts + 1] = NUMBER_WORDS[w]
 			i = i + 1
 		elseif entry and entry.pos == "det" then
+			info.negative = info.negative or entry.negative
 			self:Count(item)
-			parts[#parts + 1] = entry.ja
+			parts[#parts + 1] = (w == "more" and info.negative) and "これ以上の" or entry.ja
 			info.determined = true
 			i = i + 1
 		elseif entry and entry.pos == "v" and info.determined and not item.infl and items[i - 1] and items[i - 1].kind == "word"
@@ -750,6 +800,7 @@ function Clause:NounPhrase(i)
 			info.determined = true
 			i = i + 1
 		elseif entry and entry.pos == "pn" then
+			info.negative = info.negative or entry.negative
 			self:Count(item)
 			parts[#parts + 1] = entry.ja
 			info.pronoun = w
@@ -775,6 +826,11 @@ function Clause:NounPhrase(i)
 			parts[#parts + 1] = entry.ja
 			i = i + 1
 		elseif entry and entry.pos == "a" then
+			if info.head and IsPlaceName(info.head.ja or "") and DIRECTIONS[w]
+				and items[i + 1] and STRUCTURES[items[i + 1].base or items[i + 1].w] and not T.userLexicon[w] then
+				parts[#parts + 1] = "の"
+				info.head = nil
+			end
 			if item.infl == "adverb" or info.head then
 				-- English adjectives come before their noun; one after it ("rss down")
 				-- belongs to the clause, not to this phrase.
@@ -813,6 +869,14 @@ function Clause:NounPhrase(i)
 			i = i + 2
 		elseif entry and entry.pos == "n" then
 			self:Count(item)
+			if info.head and IsPlaceName(info.head.ja or "") and DIRECTIONS[w]
+				and items[i + 1] and STRUCTURES[items[i + 1].base or items[i + 1].w] and not T.userLexicon[w] then
+				parts[#parts + 1] = "の"
+			end
+			if info.direction and STRUCTURES[item.base or w] then
+				parts[#parts + 1] = "の"
+			end
+			info.direction = DIRECTIONS[w] and not T.userLexicon[w]
 			if entry.join and info.head then
 				parts[#parts + 1] = entry.join
 			elseif info.head and info.head["then"] and not entry.ends then
@@ -1092,6 +1156,11 @@ function Clause:Auxiliary(i, form, state)
 		state.be = true
 		form.past = form.past or BE[w].past
 		i = i + 1
+		if NEGATORS[self:W(i) or ""] then
+			self:Count(self.items[i])
+			form.negative = true
+			i = i + 1
+		end
 		if self:W(i) == "going" and self:W(i + 1) == "to" and self:IsVerb(i + 2) then
 			self:Count(self.items[i])
 			self:Count(self.items[i + 1])
@@ -1125,6 +1194,44 @@ function Clause:Translate(options)
 		form[key] = value
 	end
 	local state = {}
+
+	-- Elliptical availability questions: require a question mark, a known noun and
+	-- a fully parsed tail. "take any ..." and unknown player names are not inferred.
+	if options.questionMark and self:W(1) == "any" and not T.userLexicon.any and self:IsNounPhraseStart(2) then
+		local np, j = self:NounPhrase(2)
+		local location, online = "", false
+		if self:W(j) == "online" and not T.userLexicon.online then
+			self:Count(items[j])
+			online = true
+			j = j + 1
+		elseif self:Entry(j) and self:Entry(j).place and self:Pos(j) == "adv" then
+			self:Count(items[j])
+			location = self:Entry(j).ja .. "に"
+			j = j + 1
+		elseif (self:W(j) == "at" or self:W(j) == "in") and self:IsNounPhraseStart(j + 1) then
+			self:Count(items[j])
+			local place
+			place, j = self:NounPhrase(j + 1)
+			location = place.ja .. "に"
+		end
+		if np.head and not np.unknownHead and not items[j] and (not online or IsAnimate(np.head)) then
+			self:Count(items[1])
+			self.question = true
+			return location .. (online and "オンラインの" or "") .. np.ja .. "は" .. (IsAnimate(np.head) and "いますか" or "ありますか")
+		end
+	end
+
+	-- A common verbless warning. Only consume the rule when the whole remaining
+	-- clause is its noun phrase; other constructions still go through the parser.
+	if self:W(1) == "not" and self:W(2) == "enough" and self:IsNounPhraseStart(3)
+		and not T.userLexicon.enough then
+		local np, nextIndex = self:NounPhrase(3)
+		if not items[nextIndex] then
+			self:Count(items[1])
+			self:Count(items[2])
+			return np.ja .. "が足りません"
+		end
+	end
 
 	-- Fixed expressions and "please" come out of the clause first. What remains is the
 	-- sentence they were decorating: "hi, can you help" -> こんにちは + the question.
@@ -1179,6 +1286,12 @@ function Clause:Translate(options)
 	local wh, whItem
 	local subject
 	local existential = false
+
+	if self:W(i) == "only" and self:IsVerb(i + 1) and self:IsNounPhraseStart(i + 2) then
+		self:Count(items[i])
+		state.onlyObject = true
+		i = i + 1
+	end
 
 	if self:W(i) == "let's" then
 		self:Count(items[i])
@@ -1255,6 +1368,8 @@ function Clause:Translate(options)
 		end
 	end
 
+	if subject and subject.negative then form.negative = true end
+
 	-- Auxiliaries after the subject, and the adverbs English puts among them:
 	-- "I usually get up", "we have already won", "I really want to go".
 	state.preAdverbs = {}
@@ -1315,6 +1430,23 @@ function Clause:Translate(options)
 		i = i + 1
 	end
 
+	if verbItem and (verbItem.base == "keep" or verbItem.base == "stop") and self:IsVerb(i) and items[i].infl == "ing" then
+		state.aspect = verbItem.base == "keep" and "continue" or "stop"
+		verbItem = items[i]
+		self:Count(verbItem)
+		i = i + 1
+	end
+
+	if verbItem and verbItem.base == "want" and self:Pos(i) == "pn" and self:W(i + 1) == "to" and self:IsVerb(i + 2) then
+		state.wantedActor = items[i].entry.ja
+		self:Count(items[i])
+		self:Count(items[i + 1])
+		verbItem = items[i + 2]
+		self:Count(verbItem)
+		form.mode = "want_person"
+		i = i + 3
+	end
+
 	-- want to / need to / try to ...
 	while verbItem and self:W(i) == "to" do
 		local chain = CHAIN[verbItem.base]
@@ -1356,6 +1488,12 @@ function Clause:Translate(options)
 	if please and verbItem and not question then
 		imperative = true
 		subject = nil
+	end
+	if not subject and not question and verbItem and self:W(1) == "never" then imperative = true end
+	if not subject and not question and state.be and not form.mode
+		and (self:W(1) == "be" or (self:W(1) == "do" and self:W(2) == "not" and self:W(3) == "be")
+			or (self:W(1) == "never" and self:W(2) == "be")) then
+		imperative = true
 	end
 	if imperative then
 		form.mode = form.mode == "can" and "request" or (form.mode or "imperative")
@@ -1463,8 +1601,12 @@ function Clause:Translate(options)
 		while items[nextVerb] and (NEGATORS[self:W(nextVerb) or ""] or self:Pos(nextVerb) == "adv") do
 			nextVerb = nextVerb + 1
 		end
-		if MODALS[self:W(modalIndex) or ""] and verbItem and (#objects > 0 or #phrases > 0)
-			and self:IsVerb(nextVerb) then
+		local separateAction = form.mode == "imperative" and verbItem and #objects > 0
+			and COMBAT_ACTIONS[verbItem.base] and COMBAT_ACTIONS[item.base or w]
+			and self:IsVerb(i) and not item.infl and self:IsNounPhraseStart(i + 1)
+			and not T.userLexicon[verbItem.base] and not T.userLexicon[item.base or w]
+		if separateAction or ((MODALS[self:W(modalIndex) or ""] or DO[self:W(modalIndex) or ""] and NEGATORS[self:W(modalIndex + 1) or ""]) and verbItem and (#objects > 0 or #phrases > 0)
+			and self:IsVerb(nextVerb)) then
 			local tail = {}
 			for k = i, #items do tail[#tail + 1] = items[k] end
 			local clause = NewClause(tail)
@@ -1597,6 +1739,10 @@ function Clause:Translate(options)
 			isCopula = true
 			state.be = true
 			i = i + 2
+		elseif w == "only" and self:IsNounPhraseStart(i + 1) then
+			self:Count(item)
+			state.onlyObject = true
+			i = i + 1
 		elseif (pos == "adv" and self:Pos(i + 1) ~= "a") or pos == "wh" then
 			self:Count(item)
 			if item.entry.place and (isCopula or verbItem) then
@@ -1665,6 +1811,17 @@ function Clause:Translate(options)
 		end
 	end
 
+	for _, object in ipairs(objects) do
+		if object.negative then
+			form.negative = true
+			if not verbItem and not isCopula and not existential then object.ja = object.ja .. "なし" end
+		end
+	end
+	if complement and complement.negative then form.negative = true end
+	if subject and subject.negative and not subject.pronoun and not verbItem and not isCopula then
+		subject.ja = subject.ja .. "なし"
+	end
+
 	-- ---- assemble -------------------------------------------------------------------
 	local out = {}
 
@@ -1676,6 +1833,19 @@ function Clause:Translate(options)
 		complement = objects[1]
 		objects = {}
 		hasPredicate = true
+	end
+
+	-- "healer here": location reports with a known entity and no other predicate.
+	if not hasPredicate and subject and subject.head and #objects == 0 and #phrases == 0
+		and #adverbs == 1 and #remainder == 0 and #prefix == 0 and #suffix == 0 then
+		local last = items[#items]
+		if last and last.entry and last.entry.place and last.entry.pos == "adv" then
+			if subject.negative then
+				-- The verbless fallback above appends なし; use the negative predicate here.
+				return adverbs[1] .. "に" .. subject.ja:gsub("なし$", "") .. "は" .. (IsAnimate(subject.head) and "いません" or "ありません")
+			end
+			return adverbs[1] .. "に" .. subject.ja .. "が" .. (IsAnimate(subject.head) and "います" or "あります")
+		end
 	end
 
 	-- No verb at all.
@@ -1716,7 +1886,14 @@ function Clause:Translate(options)
 
 	if subject and subject.ja ~= "" and form.mode ~= "request" then
 		if hasPredicate then
-			local particle = (options.subordinate or INDEFINITE_PRONOUNS[subject.pronoun or ""]) and "が" or "は"
+			local particle = (subject.negative and subject.pronoun) and "" or ((options.subordinate or INDEFINITE_PRONOUNS[subject.pronoun or ""]) and "が" or "は")
+			if verbItem and verbItem.base == "need" and not subject.negative and not T.userLexicon.need then
+				if options.questionMark and INDEFINITE_PRONOUNS[subject.pronoun or ""] then
+					particle = "、"
+				elseif options.subordinate then
+					particle = "に"
+				end
+			end
 			out[#out + 1] = subject.ja .. particle
 		else
 			-- No verb at all: "nice sword", "2 dps lf healer". Say the words, not a sentence.
@@ -1741,9 +1918,12 @@ function Clause:Translate(options)
 	for _, phrase in ipairs(phrases) do
 		out[#out + 1] = phrase
 	end
+	if state.wantedActor then out[#out + 1] = state.wantedActor .. "に" end
 
 	local isStative = verbItem and (verbItem.entry.class == "i" or verbItem.entry.class == "na")
 	local objectParticle = verbParticle or (isStative and "が" or "を")
+	if state.onlyObject and objects[1] then objects[1].ja = objects[1].ja .. "だけ" end
+	if verbItem and verbItem.base == "ask" and objects[1] and objects[1].pronoun then objectParticle = "に" end
 
 	if whJa and not state.whSubject and verbItem and not (wh == "when" or wh == "why" or wh == "how") then
 		if wh == "where" then
@@ -1755,7 +1935,8 @@ function Clause:Translate(options)
 		end
 	end
 
-	if (form.mode == "request" or form.mode == "imperative") and #objects == 1 and objects[1].ja == "私" then
+	if (form.mode == "request" or form.mode == "imperative") and #objects == 1 and objects[1].ja == "私"
+		and verbItem and verbItem.base == "help" then
 		-- "can you help me" -> 手伝ってもらえますか; the 私を is implied by the request.
 		table.remove(objects, 1)
 	end
@@ -1769,7 +1950,13 @@ function Clause:Translate(options)
 		end
 	end
 
-	if #objects >= 2 then
+	local quantityList = #objects >= 2
+	for _, object in ipairs(objects) do quantityList = quantityList and object.countSuffix ~= nil end
+	if quantityList then
+		local parts = {}
+		for _, object in ipairs(objects) do parts[#parts + 1] = object.ja end
+		out[#out + 1] = table.concat(parts, "と") .. objectParticle
+	elseif #objects >= 2 then
 		out[#out + 1] = objects[1].ja .. "に"
 		for k = 2, #objects do
 			out[#out + 1] = objects[k].ja .. objectParticle
@@ -1779,7 +1966,7 @@ function Clause:Translate(options)
 			-- no verb: "bm roe inner 80 percent" is a list
 			out[#out] = out[#out] .. "、"
 		end
-		out[#out + 1] = objects[1].ja .. (verbItem and objectParticle or "")
+		out[#out + 1] = objects[1].ja .. (verbItem and not (objects[1].negative and objects[1].pronoun) and objectParticle or "")
 	end
 
 	if extraVerbTe then
@@ -1810,16 +1997,36 @@ function Clause:Translate(options)
 		out[#out + 1] = predicateExpression
 	elseif verbItem then
 		local verbEntry = verbItem.entry
+		if options.subordinate and verbItem.base == "ready" and verbEntry.ja == "準備ができている"
+			and not T.userLexicon.ready then
+			verbEntry = { ja = "準備できる", class = "1" }
+		end
+		if verbItem.base == "leave" and not T.userLexicon.leave and objects[1] and objects[1].pronoun
+			and ({ me = true, us = true, you = true, him = true, her = true, them = true })[objects[1].pronoun] then
+			verbEntry = { ja = "置き去りにする", class = "s" }
+		end
 		if #objects == 0 and not embedded and subject and not PERSON_PRONOUNS[subject.pronoun or ""]
 			and INTRANSITIVE[verbEntry.ja] and form.mode ~= "passive" then
 			-- "the event starts" -> 始まります, not 始めます
 			verbEntry = INTRANSITIVE[verbEntry.ja]
 		end
+		if state.aspect then
+			verbEntry = { class = "1" }
+			if state.aspect == "continue" then
+				verbEntry.ja = T.Stem(verbItem.entry.ja, verbItem.entry.class) .. "続ける"
+			elseif form.mode == "imperative" and not form.negative then
+				-- "stop attacking" is an instruction to cease this action.
+				verbEntry = verbItem.entry
+				form.negative = true
+			else
+				verbEntry.ja = T.PlainPredicate(verbItem.entry, {}) .. "のをやめる"
+			end
+		end
 		out[#out + 1] = T.Predicate(verbEntry, form)
 	elseif out[#out] == "ください" or out[#out] == "もらえます" then
 		-- already said
 	elseif existential then
-		local exists = { ja = "ある", class = "5" }
+		local exists = complement and IsAnimate(complement.head) and { ja = "いる", class = "1" } or { ja = "ある", class = "5" }
 		if complement then
 			out[#out + 1] = complement.ja .. "が"
 		end
@@ -1940,6 +2147,12 @@ StartsClause = function(items, i)
 		return false
 	end
 	local w = item.w
+	local nextItem = items[i + 1]
+	if (INDEFINITE_PRONOUNS[w] or w == "everyone" or w == "everybody") and nextItem
+		and (BE[nextItem.w] or MODALS[nextItem.w] or DO[nextItem.w] or HAVE[nextItem.w]
+			or (nextItem.entry and nextItem.entry.pos == "v")) then
+		return true
+	end
 	if SUBJECT_PRONOUNS[w] or w == "there" or w == "let's" or BE[w] or MODALS[w] then
 		return true
 	end
@@ -1979,7 +2192,14 @@ local function SplitClauses(items)
 				split = true
 			end
 		end
-		if split then
+		local previous = current.items[#current.items]
+		if not conj and (current.conj == "if" or current.conj == "unless" or current.conj == "when")
+			and previous and previous.base == "ready" and not T.userLexicon.ready
+			and item.entry and item.entry.pos == "v" and not item.infl
+			and item.entry.class ~= "i" and item.entry.class ~= "na" and not IsStateVerb(item.entry) then
+			-- "if you are ready push fd": the state ends the condition, push starts the call.
+			clauses[#clauses + 1] = { items = { item } }
+		elseif split then
 			if #current.items == 0 and not current.conj then
 				current.conj = w
 			else
@@ -1992,7 +2212,7 @@ local function SplitClauses(items)
 	return clauses
 end
 
-local function TranslateSegment(items, stats)
+local function TranslateSegment(items, stats, questionMark)
 	local clauses = SplitClauses(items)
 	local subordinate, main = {}, {}
 	local mainQuestion = false
@@ -2008,7 +2228,7 @@ local function TranslateSegment(items, stats)
 					subordinate[#subordinate + 1] = (conj.before or "") .. text .. conj.after
 				end
 			else
-				text = parser:Translate({})
+				text = parser:Translate({ questionMark = questionMark })
 				if text ~= "" then
 					local joined = text
 					if conj and #main > 0 then
@@ -2070,7 +2290,7 @@ function T.Translate(text)
 			local parts = {}
 			local question = false
 			for _, run in ipairs(segments) do
-				local ja, isQuestion = TranslateSegment(run, stats)
+				local ja, isQuestion = TranslateSegment(run, stats, mark == "?")
 				if ja ~= "" then
 					parts[#parts + 1] = ja
 				end

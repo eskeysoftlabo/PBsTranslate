@@ -418,6 +418,73 @@ do
 	addon.formattedDecision = nil
 end
 
+-- ---- dictionary rows on the settings panel -------------------------------------------
+do
+	local function Row(label)
+		for _, row in ipairs(PanelRows) do
+			if row.label == GetString(label) and row.type ~= LibHarvensAddonSettings.ST_LABEL then return row end
+		end
+	end
+	local english, japanese, pos = Row(SI_PBSTR_WORD_ENGLISH), Row(SI_PBSTR_WORD_JAPANESE), Row(SI_PBSTR_WORD_POS)
+	local add, list, remove = Row(SI_PBSTR_WORD_ADD), Row(SI_PBSTR_WORD_LIST), Row(SI_PBSTR_WORD_REMOVE)
+	check("panel has word rows", english and japanese and pos and add and list and remove and true, true)
+	local message
+	for _, row in ipairs(PanelRows) do
+		-- The first dynamic label belongs to dictionary editing; sharing has its own status label.
+		if row.type == LibHarvensAddonSettings.ST_LABEL and type(row.label) == "function" then message = row.label; break end
+	end
+	check("panel has a result line", message ~= nil, true)
+	local function Pick(row, name)
+		for _, item in ipairs(type(row.items) == "function" and row.items() or row.items) do
+			if item.name == name then row.setFunction(nil, item.name, item) return true end
+		end
+		return false
+	end
+
+	check("empty list shows placeholder", list.getFunction(), GetString(SI_PBSTR_REPLY_NO_WORDS))
+	add.clickHandler()
+	check("empty draft refused", message(), GetString(SI_PBSTR_ERROR_WORD_EMPTY))
+
+	english.setFunction("Raid Night")
+	japanese.setFunction("a/b")
+	add.clickHandler()
+	check("slash refused", message(), GetString(SI_PBSTR_ERROR_WORD_CHARS))
+	check("refused word not saved", addon.sv.userWords["raid night"], nil)
+
+	japanese.setFunction("レイドの夜")
+	check("noun kind offered", Pick(pos, GetString(SI_PBSTR_POS_N)), true)
+	add.clickHandler()
+	check("panel saves noun", addon.sv.userWords["raid night"], "n:レイドの夜")
+	check("panel word translates", T.Translate("raid night"), "レイドの夜")
+	check("draft cleared after add", english.getFunction() .. japanese.getFunction(), "")
+	check("kind reset after add", pos.getFunction(), GetString(SI_PBSTR_POS_X))
+	check("added word selected in list", list.getFunction(), "raid night = レイドの夜")
+
+	english.setFunction("yeet")
+	japanese.setFunction("投げる")
+	Pick(pos, GetString(SI_PBSTR_POS_ICHIDAN))
+	add.clickHandler()
+	check("panel saves verb class", addon.sv.userWords["yeet"], "v:投げる/1")
+	check("panel verb conjugates", T.Translate("I yeeted it"), "私はそれを投げました")
+	check("list shows plain Japanese", list.getFunction(), "yeet = 投げる")
+
+	check("list pick", Pick(list, "raid night = レイドの夜"), true)
+	remove.clickHandler()
+	check("panel removes word", addon.sv.userWords["raid night"], nil)
+	check("remove reported", message(), string.format(GetString(SI_PBSTR_REPLY_REMOVED), "raid night"))
+	Pick(list, "yeet = 投げる")
+	remove.clickHandler()
+	check("list empty again", list.getFunction(), GetString(SI_PBSTR_REPLY_NO_WORDS))
+	remove.clickHandler()
+	check("remove with nothing picked", addon.sv.userWords["yeet"], nil)
+
+	-- The command keeps a Japanese word whose last byte is 0xA0 (ム) whole.
+	SLASH_COMMANDS["/pbtr"]("add  mmo game =  ゲーム ")
+	check("command trims without cutting UTF-8", addon.sv.userWords["mmo game"], "ゲーム")
+	SLASH_COMMANDS["/pbtr"]("remove mmo game")
+	check("command removal", addon.sv.userWords["mmo game"], nil)
+end
+
 -- ---- location-dependent dictionary priority -----------------------------------------
 check("initial dictionary is normal", T.cyrodiilPriority, false)
 local entryCount = T.entryCount
@@ -454,10 +521,9 @@ do
 	local realCheck = IsInCyrodiil
 	IsInCyrodiil = function() error("Attempt to access a private function 'IsInCyrodiil' from insecure code") end
 	ClearChat()
-	addon.bannerShown = false
 	Fire(EVENT_PLAYER_ACTIVATED)
 	IsInCyrodiil = realCheck
-	check("banner printed once", ChatWindow[1] ~= nil and ChatWindow[1]:find("start-up step", 1, true) ~= nil, true)
+	check("nothing printed at login", #ChatWindow, 0)
 	ClearChat()
 	Speak(CHAT_CATEGORY_SAY, "@Someone", "thank you")
 	check("still translating after a failed step", #ChatWindow, 2)

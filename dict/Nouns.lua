@@ -6,6 +6,7 @@
 local D = PBsTranslate.Define
 
 D("n", [[
+form=用紙
 -- people
 person=人
 people=人々

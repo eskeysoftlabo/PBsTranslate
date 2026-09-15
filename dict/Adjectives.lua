@@ -1048,3 +1048,7 @@ off cd=使用可能な/na
 pay to win=課金ゲーの/na
 free to play=無料で遊べる/na
 ]])
+
+D("a", [[
+outnumbered=数で劣勢/na
+]])

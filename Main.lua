@@ -3,7 +3,7 @@
 --
 -- English chat, with a Japanese line under it.
 --
--- An add-on cannot reach the network, so there is no translation service to ask. Everything
+-- An add-on cannot reach an external translation service. Translation runs entirely
 -- happens in this folder: a dictionary of a couple of thousand English words, chat shorthand
 -- and ESO terms (dict/), and a small rule-based grammar that turns English word order into
 -- Japanese word order (Tokenizer.lua, Grammar.lua, Conjugate.lua). The result is a rough,
@@ -63,7 +63,7 @@ local function ReadManifestVersion()
 		local name, title = manager:GetAddOnInfo(index)
 		if name == addon.name and title then
 			local plain = title:gsub("|c%x%x%x%x%x%x", ""):gsub("|r", "")
-			return plain:match("([%d]+[%d%.]*)%s*$") or ""
+			return plain:match("([%d]+[%d%.]*%-[%w%.%-]+)%s*$") or plain:match("([%d]+[%d%.]*)%s*$") or ""
 		end
 	end
 	return ""
@@ -489,41 +489,77 @@ function addon:ApplyUserWords()
 	T.SetUserEntries(self.sv.userWords)
 end
 
--- "raid night = レイドの夜" or "raid night = n:レイドの夜"
-function addon:AddUserWord(argument)
-	local english, japanese = tostring(argument or ""):match("^%s*(.-)%s*=%s*(.-)%s*$")
-	if not english or english == "" or not japanese or japanese == "" then
-		Print(GetString(SI_PBSTR_ERROR_ADD_FORMAT))
-		return
-	end
-	local pos = japanese:match("^([A-Za-z]+):")
-	if pos and not ({ n = true, v = true, a = true, adv = true, x = true, pn = true })[pos] then
-		Print(GetString(SI_PBSTR_ERROR_POS), pos)
-		return
-	end
-	english = T.Lower(english):gsub("[ \t\r\n]+", " ")
-	self.sv.userWords[english] = japanese
-	self:ApplyUserWords()
-	Print(GetString(SI_PBSTR_REPLY_ADDED), english, japanese)
+local USER_POS = { n = true, v = true, a = true, adv = true, x = true, pn = true }
+
+local function WordKey(english)
+	return (T.Trim(T.Lower(english or "")):gsub("[ \t\r\n]+", " "))
 end
 
-function addon:RemoveUserWord(argument)
-	local english = T.Trim(T.Lower(argument)):gsub("[ \t\r\n]+", " ")
+-- Shared by /pbtr add and the settings panel. value is what is saved: "レイドの夜", or with a
+-- part of speech in front, "n:レイドの夜" / "v:走る/5". Returns the key, or nil and a message.
+function addon:StoreUserWord(english, value)
+	english = WordKey(english)
+	value = T.Trim(value or "")
+	if english == "" or value == "" or english:find("=", 1, true) then
+		return nil, GetString(SI_PBSTR_ERROR_ADD_FORMAT)
+	end
+	local pos = value:match("^([A-Za-z]+):")
+	if pos and not USER_POS[pos] then
+		return nil, string.format(GetString(SI_PBSTR_ERROR_POS), pos)
+	end
+	if not T.IsValidUTF8(english) or not T.IsValidUTF8(value) then
+		return nil, GetString(SI_PBSTR_ERROR_ADD_FORMAT)
+	end
+	self.sv.userWords[english] = value
+	self:ApplyUserWords()
+	return english
+end
+
+function addon:DeleteUserWord(english)
+	english = WordKey(english)
 	if self.sv.userWords[english] == nil then
-		Print(GetString(SI_PBSTR_ERROR_NOT_FOUND), english)
-		return
+		return nil, string.format(GetString(SI_PBSTR_ERROR_NOT_FOUND), english)
 	end
 	self.sv.userWords[english] = nil
 	self:ApplyUserWords()
-	Print(GetString(SI_PBSTR_REPLY_REMOVED), english)
+	return english
 end
 
-function addon:ListUserWords()
+-- The added words, sorted, for /pbtr list and the panel's list.
+function addon:SortedUserWords()
 	local keys = {}
 	for english in pairs(self.sv.userWords) do
 		keys[#keys + 1] = english
 	end
 	table.sort(keys)
+	return keys
+end
+
+-- "raid night = レイドの夜" or "raid night = n:レイドの夜"
+function addon:AddUserWord(argument)
+	-- No %s here: it is locale-dependent and could take the last byte of a Japanese word.
+	local english, japanese = tostring(argument or ""):match("^([^=]*)=(.*)$")
+	local key, err = self:StoreUserWord(english, japanese)
+	if not key then
+		Print("%s", err)
+		return
+	end
+	self:RefreshPanel()
+	Print(GetString(SI_PBSTR_REPLY_ADDED), key, self.sv.userWords[key])
+end
+
+function addon:RemoveUserWord(argument)
+	local key, err = self:DeleteUserWord(argument)
+	if not key then
+		Print("%s", err)
+		return
+	end
+	self:RefreshPanel()
+	Print(GetString(SI_PBSTR_REPLY_REMOVED), key)
+end
+
+function addon:ListUserWords()
+	local keys = self:SortedUserWords()
 	if #keys == 0 then
 		Print(GetString(SI_PBSTR_REPLY_NO_WORDS))
 		return
@@ -789,15 +825,7 @@ local function OnPlayerActivated()
 	Step("dictionary context", function()
 		addon:UpdateDictionaryContext()
 	end)
-	-- One line per session: which build is running, and whether it started cleanly. A line at
-	-- EVENT_ADD_ON_LOADED would be discarded, because chat is not up yet.
-	if not addon.bannerShown then
-		addon.bannerShown = true
-		local failed = #addon.loadSteps - (addon.okSteps or 0)
-		Print("%s -- listener %s, %s", addon.version ~= "" and addon.version or "?",
-			addon.installed and "on" or "OFF",
-			failed == 0 and "started cleanly" or (failed .. " start-up step(s) failed, see /pbtr probe"))
-	end
+	-- Nothing is printed at login; /pbtr probe reports the build and any failed start-up step.
 end
 
 -- Upgrade the previous default once; preserve other explicitly chosen thresholds.
@@ -844,6 +872,9 @@ local function OnAddOnLoaded(_, name)
 		if addon.InitSettings then
 			addon:InitSettings()
 		end
+	end)
+	Step("dictionary sharing", function()
+		if addon.InitSharing then addon:InitSharing() end
 	end)
 	em:RegisterForEvent(addon.name, EVENT_PLAYER_ACTIVATED, OnPlayerActivated)
 end

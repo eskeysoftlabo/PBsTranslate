@@ -184,6 +184,37 @@ T.AdjectiveDesu = AdjectiveDesu
 --   kind  "n" | "i" | "na"
 function T.Copula(word, kind, form)
 	form = form or {}
+	if form.mode == "imperative" and kind ~= "rel" then
+		if kind == "i" then
+			local stem = (word == "いい" and "よい" or word):sub(1, -4)
+			return stem .. (form.negative and "くならないでください" or "くなってください")
+		end
+		return word .. (form.negative and "でいないでください" or "でいてください")
+	end
+	if kind ~= "rel" and (form.mode == "must" or form.mode == "have_to" or form.mode == "should" or form.mode == "need") then
+		local isI = kind == "i"
+		local stem = isI and ((word == "いい" and "よい" or word):sub(1, -4)) or word
+		local plain = isI and word or (word .. "である")
+		local result
+		if form.mode == "must" or form.mode == "have_to" then
+			if form.negative and form.mode == "must" then
+				result = stem .. (isI and "くてはいけません" or "であってはいけません")
+			elseif form.negative then
+				result = stem .. (isI and "くなくてもいいです" or "でなくてもいいです")
+			else
+				result = stem .. (isI and "くなければなりません" or "でなければなりません")
+			end
+		elseif form.mode == "should" then
+			if isI then
+				result = (form.negative and (stem .. "くない") or word) .. "ほうがいいです"
+			else
+				result = plain .. (form.negative and "べきではありません" or "べきです")
+			end
+		else
+			result = plain .. (form.negative and "必要はありません" or "必要があります")
+		end
+		return form.plain and T.ToPlain(result) or result
+	end
 	if (form.plain or form.conditional) and kind == "rel" then
 		return T.ToPlain(T.RelativePredicate(word, form))
 	end
@@ -302,6 +333,8 @@ function T.Predicate(entry, form)
 
 	if mode == "progressive" then
 		return Masu(TeForm(word, class) .. "い", past, negative)
+	elseif mode == "want_person" then
+		return TeForm(word, class) .. AdjectiveDesu("ほしい", past, negative)
 	elseif mode == "want" then
 		local stem = Stem(word, class)
 		if past and negative then

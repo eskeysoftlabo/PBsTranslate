@@ -669,3 +669,8 @@ omw=向かっています
 be there soon=すぐ行きます
 on my way=向かっています
 ]])
+
+-- A ground-effect warning, not a reference to an alliance.
+D("adv", [[
+in the red=赤い範囲内に
+]])

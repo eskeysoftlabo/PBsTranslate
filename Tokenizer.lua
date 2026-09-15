@@ -167,6 +167,13 @@ function T.Tokenize(text)
 			local mark = run:find("?", 1, true) and "?" or run:sub(1, 1)
 			tokens[#tokens + 1] = { kind = "punct", v = mark }
 			i = i + #run
+		elseif text:sub(i, i + 2) == "—" or text:sub(i, i + 2) == "–" then
+			-- A typed dash separates calls; do not turn it into a noun/object.
+			tokens[#tokens + 1] = { kind = "punct", v = ";" }
+			i = i + 3
+		elseif c == "-" and text:sub(i - 1, i - 1):match("%s") and text:sub(i + 1, i + 1):match("%s") then
+			tokens[#tokens + 1] = { kind = "punct", v = ";" }
+			i = i + 1
 		elseif c == "-" and #tokens > 0 and tokens[#tokens].kind == "word" and text:sub(i + 1, i + 1):match("[A-Za-z]") then
 			-- well-known, re-roll: read as two words.
 			i = i + 1

@@ -100,6 +100,8 @@ InImperialCity = false
 function IsInImperialCity() return InImperialCity end
 
 function GetDisplayName() return "@PinkBanther" end
+function GetFrameTimeSeconds() return 0 end
+function GetGroupSize() return 0 end
 
 -- ---- add-on manager -----------------------------------------------------------------
 function GetAddOnManager()
@@ -130,6 +132,7 @@ ZO_SavedVars = {
 PanelRows = {}
 LibHarvensAddonSettings = {
 	ST_COLOR = "color", ST_LABEL = "label", ST_SECTION = "section", ST_CHECKBOX = "checkbox", ST_SLIDER = "slider",
+	ST_EDIT = "edit", ST_DROPDOWN = "dropdown", ST_BUTTON = "button",
 	AddAddon = function(_, title)
 		local panel = { title = title }
 		function panel:AddSetting(row) PanelRows[#PanelRows + 1] = row end
