@@ -1479,3 +1479,18 @@ spawn camp=湧き待ちする/s
 dodge queue=キューを抜ける/1
 get carried=キャリーされる/1
 ]])
+
+-- Participle phrases, as predicates of their own: "made of iron" -> 鉄でできている. They also
+-- modify a noun from behind ("a sword made of iron", see Grammar.lua PostModifierStart).
+D("v", [[
+made of=できている/1/で
+made from=作られている/1/から
+made in=作られている/1/で
+known as=知られている/1/として
+written by=書かれている/1/に
+filled with=満たされている/1/で
+covered with=覆われている/1/で
+located in=ある/5/に
+based on=基づいている/1/に
+used for=使われている/1/に
+]])

@@ -521,3 +521,15 @@ stop inting=わざと死なないで
 got ninja looted=横取りされた
 was ninja looted=横取りされた
 ]])
+
+-- Set questions the grammar would take apart word by word
+D("x", [[
+what do you think=どう思いますか
+what do you think of=どう思いますか
+what do you mean by=どういう意味ですか
+how about you=あなたはどうですか
+what about you=あなたはどうですか
+how do you do=はじめまして
+what is it like=どんな感じですか
+what does it look like=どんな見た目ですか
+]])

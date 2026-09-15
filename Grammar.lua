@@ -45,7 +45,7 @@ local INDEFINITE_PRONOUNS = {
 }
 local SUBJECT_PRONOUNS = { i = true, you = true, we = true, they = true, he = true, she = true, it = true }
 
-local GRAMMAR_WORDS = { to = true, ["let's"] = true, let = true, ["'s"] = true, please = true, of = true }
+local GRAMMAR_WORDS = { to = true, ["let's"] = true, let = true, ["'s"] = true, please = true, of = true, as = true }
 
 local function IsGrammarWord(w)
 	return BE[w] or DO[w] or HAVE[w] or MODALS[w] or NEGATORS[w] or ARTICLES[w] or GRAMMAR_WORDS[w]
@@ -56,7 +56,7 @@ local REPORT_VERBS = {
 	think = true, guess = true, believe = true, hope = true, know = true, say = true, feel = true,
 	suppose = true, bet = true, hear = true, remember = true, forget = true, wonder = true,
 	understand = true, mean = true, heard = true, tell = true,
-	realize = true, realise = true, notice = true, admit = true, claim = true, explain = true,
+	realize = true, realise = true, notice = true, wish = true, admit = true, claim = true, explain = true,
 	mention = true, prove = true, discover = true, doubt = true, expect = true, imagine = true,
 	assume = true, recognize = true, predict = true, report = true, learn = true, find = true,
 	agree = true, insist = true, suggest = true, warn = true, promise = true,
@@ -106,6 +106,22 @@ local MOTION_VERBS = {
 	come = true, go = true, ["return"] = true, run = true, hurry = true, stop = true, visit = true,
 	stay = true, travel = true, walk = true, drive = true, fly = true, move = true, work = true,
 	study = true, save = true, arrive = true, leave = true, gather = true, meet = true, wait = true,
+}
+
+-- Subjects that can open a relative clause with no "that": "the item you need"
+-- A verb entry that already names a state: 持っている, 死んでいる
+local function IsStateVerb(entry)
+	local ja = entry and entry.ja or ""
+	return ja:sub(-9) == "ている" or ja:sub(-9) == "でいる"
+end
+
+local CONTACT_SUBJECTS = { i = true, you = true, we = true, they = true, he = true, she = true }
+
+-- Participle phrases that modify the noun before them: "a sword made of iron"
+local PARTICIPLE_PHRASES = {
+	["made of"] = true, ["made from"] = true, ["made in"] = true, ["known as"] = true, ["written by"] = true,
+	["filled with"] = true, ["covered with"] = true, ["called"] = true, ["named"] = true,
+	["located in"] = true, ["based on"] = true, ["used for"] = true,
 }
 
 local PLACING_VERBS = { put = true, drop = true, place = true, set = true, stack = true, go = true, port = true, ["drop siege"] = true, ["set up siege"] = true }
@@ -202,6 +218,8 @@ local EXPRESSION_OBJECTS = {
 	{ "おめでとう", "on", "" },
 	{ "おめでとう", "for", "" },
 	{ "頑張って", "with", "" },
+	{ "どう思いますか", "about", "について" },
+	{ "どう思いますか", "of", "について" },
 	{ "向かっている途中", "to", "に" },
 }
 
@@ -419,7 +437,7 @@ local function Disambiguate(items)
 					-- "it is mine": after be, the pronoun reading of a word that is also a place
 					wantPos = "pn"
 				elseif BE[w] and (entry.pos == "x" or entry.pos == "v" and item.infl ~= "ing" and item.infl ~= "past"
-					and not entry.ja:find("ている$")) then
+					and not IsStateVerb(entry)) then
 					-- "it's ok", "I am new": an expression or verb after "be" is its adjective.
 					wantPos = "a"
 				elseif ARTICLES[w] or w == "'s" or DEMONSTRATIVE_DET[w] then
@@ -542,6 +560,9 @@ end
 
 -- 高い -> 高すぎ, 簡単 -> 簡単すぎ
 local function TooStem(entry)
+	if entry.class == "state" then
+		return entry.ja .. "すぎ"
+	end
 	if entry.class == "na" or entry.class == "rel" then
 		return entry.ja .. "すぎ"
 	end
@@ -704,7 +725,8 @@ function Clause:NounPhrase(i)
 			parts[#parts + 1] = entry.ja
 			info.determined = true
 			i = i + 1
-		elseif entry and entry.pos == "v" and info.determined and not item.infl then
+		elseif entry and entry.pos == "v" and info.determined and not item.infl and items[i - 1] and items[i - 1].kind == "word"
+			and (ARTICLES[items[i - 1].w] or (items[i - 1].entry and items[i - 1].entry.pos == "det")) then
 			-- "the invite", "a try": a verb with nothing but a noun reading in front of it
 			-- is its noun -- 招待, 試し.
 			self:Count(item)
@@ -721,6 +743,12 @@ function Clause:NounPhrase(i)
 		elseif entry and entry.pos == "pn" and #parts > 0 and self:W(i - 1) ~= "'s" then
 			-- "is the lumbermill ours": a pronoun after a noun starts the next phrase
 			break
+		elseif w == "her" and #parts == 0 and (self:Pos(i + 1) == "n" or self:Pos(i + 1) == "a") then
+			-- "her mother": the possessive, not the object pronoun
+			self:Count(item)
+			parts[#parts + 1] = "彼女の"
+			info.determined = true
+			i = i + 1
 		elseif entry and entry.pos == "pn" then
 			self:Count(item)
 			parts[#parts + 1] = entry.ja
@@ -729,6 +757,11 @@ function Clause:NounPhrase(i)
 			if self:W(i) ~= "'s" then
 				break
 			end
+		elseif (w == "more" or w == "most") and self:Pos(i + 1) == "a" then
+			-- "more expensive", "most important"
+			self:Count(item)
+			info.degree = w == "more" and "comparative" or "superlative"
+			i = i + 1
 		elseif entry and entry.pos == "adv" and self:Pos(i + 1) == "a" and w == "too" then
 			-- "too expensive" -> 高すぎ
 			self:Count(item)
@@ -749,14 +782,18 @@ function Clause:NounPhrase(i)
 			end
 			self:Count(item)
 			local onlyAdjective = not self:IsNounPhraseStart(i + 1) or self:Pos(i + 1) == "pn"
+			local inflection = item.infl or info.degree
 			if onlyAdjective and (#parts == 0 or info.adjectivePrefix and #parts == 1) then
 				info.adjective = entry
-				info.adjectiveInflection = item.infl
+				info.adjectiveInflection = inflection
+			end
+			if inflection == "superlative" then
+				info.superlative = true
 			end
 			if info.too then
 				parts[#parts + 1] = TooStem(entry) .. "る"
 			else
-				parts[#parts + 1] = AttributiveAdjective(entry, item.infl)
+				parts[#parts + 1] = AttributiveAdjective(entry, inflection)
 			end
 			i = i + 1
 			if onlyAdjective then
@@ -789,10 +826,25 @@ function Clause:NounPhrase(i)
 				info.ended = true
 				break
 			end
+		elseif entry and entry.pos == "v" and item.infl == "ing" and #parts == 0 then
+			-- A gerund and what it takes: "playing a tank" -> タンクを遊ぶこと
+			local stop = self:RelativeEnd(i)
+			local gerundItems = {}
+			for k = i, stop - 1 do
+				gerundItems[#gerundItems + 1] = items[k]
+			end
+			local gerund = NewClause(gerundItems)
+			local text = gerund:TranslateBare({ plain = true })
+			self.known = self.known + gerund.known
+			self.unknown = self.unknown + gerund.unknown
+			parts[#parts + 1] = text .. "こと"
+			info.head = entry
+			info.gerund = true
+			i = stop
+			break
 		elseif entry and entry.pos == "v" and item.infl == "ing" then
-			self:Count(item)
-			parts[#parts + 1] = entry.ja .. "こと"
-			i = i + 1
+			-- "the guy standing there": a participle after the noun is a post-modifier
+			break
 		elseif not entry and not IsGrammarWord(w) and not CONJUNCTIONS[w] then
 			self:Count(item)
 			parts[#parts + 1] = item.orig or w
@@ -832,7 +884,123 @@ function Clause:NounPhrase(i)
 		i = nextIndex
 	end
 
+	-- Post-modifiers: a relative clause or a participle after the noun. Japanese puts all of
+	-- it in front: "the man who sold me this sword" -> 私にこの剣を売った男性.
+	if info.ja ~= "" and (info.head or info.unknownHead or INDEFINITE_PRONOUNS[info.pronoun or ""]) then
+		local start = self:PostModifierStart(i, info)
+		if start then
+			local stop = self:RelativeEnd(start)
+			if stop > start then
+				local relItems = {}
+				for k = start, stop - 1 do
+					relItems[#relItems + 1] = items[k]
+				end
+				for k = i, start - 1 do
+					self:Count(items[k])
+				end
+				local sub = NewClause(relItems)
+				local text = sub:Translate({ form = { plain = true }, subordinate = true, relative = true })
+				self.known = self.known + sub.known
+				self.unknown = self.unknown + sub.unknown
+				if text ~= "" then
+					info.ja = Join({ text, info.ja })
+					info.adjective = nil
+					info.relative = true
+				end
+				i = stop
+			end
+		end
+	end
+
 	return info, i
+end
+
+-- Where a post-modifier begins after a noun phrase ending before i, or nil.
+function Clause:PostModifierStart(i, info)
+	local items = self.items
+	local item = items[i]
+	if not item or item.kind ~= "word" then
+		return nil
+	end
+	local w = item.w
+	local nextItem = items[i + 1]
+	local following = nextItem and nextItem.kind == "word" and nextItem.w or nil
+
+	if (w == "who" or w == "which" or w == "that" or w == "whom") and nextItem then
+		return i + 1
+	end
+	if w == "where" and (info.place or (info.head and info.head.place)) and nextItem then
+		return i + 1
+	end
+	if w == "when" and info.head and info.head.time and nextItem then
+		return i + 1
+	end
+	if w == "why" and info.head and info.head.ja == "理由" and nextItem then
+		return i + 1
+	end
+	-- "the item you need", "the sword I bought": a subject and a verb straight after the noun
+	-- Chat runs sentences together ("go to chal i will port"), so only a determined noun
+	-- ("the item", "this sword") followed straight by a verb counts.
+	if CONTACT_SUBJECTS[w] and following and self:IsVerb(i + 1) and info.head and info.determined then
+		return i
+	end
+	-- "the guy standing there", "a player using a bow"
+	if self:IsVerb(i) and item.infl == "ing" and info.head then
+		return i
+	end
+	-- "a sword made of iron", "a book written by him"
+	if self:IsVerb(i) and info.head and (PARTICIPLE_PHRASES[w] or (item.infl == "past"
+		and following and (following == "by" or following == "in" or following == "for" or following == "with"))) then
+		if not self.parsingSubject or self:LaterPredicate(i + 1) then
+			return i
+		end
+	end
+	return nil
+end
+
+-- Is there a be/modal/finite verb after i? (whether a subject noun phrase can still end)
+function Clause:LaterPredicate(i)
+	local items = self.items
+	for k = i, #items do
+		local w = self:W(k)
+		if w and (BE[w] or MODALS[w]) then
+			return true
+		end
+	end
+	return false
+end
+
+-- The index just after a post-modifier starting at start.
+function Clause:RelativeEnd(start)
+	local items = self.items
+	local j, sawVerb = start, false
+	while items[j] do
+		local item = items[j]
+		local w = item.kind == "word" and item.w or nil
+		if item.kind == "punct" then
+			break
+		end
+		if j > start and w and CONJUNCTIONS[w] and not item.phrase and SPLIT_ONLY_BEFORE_CLAUSE[w] == nil then
+			break
+		end
+		if sawVerb and self.parsingSubject and w and (BE[w] or MODALS[w] or DO[w]) then
+			break
+		end
+		-- "is the boss that killed us dead?": in a question the predicate is the last word
+		if sawVerb and self.parsingInvertedSubject and not items[j + 1] and (self:Pos(j) == "a"
+			or (self:IsVerb(j) and not item.infl and IsStateVerb(item.entry))) then
+			break
+		end
+		if sawVerb and self.parsingSubject and self:IsVerb(j) and (item.infl == "past" or item.infl == "third")
+			and self:W(j - 1) ~= "to" then
+			break
+		end
+		if self:IsVerb(j) or (w and (BE[w] or MODALS[w])) then
+			sawVerb = true
+		end
+		j = j + 1
+	end
+	return j
 end
 
 -- Auxiliaries. Returns true if the word at i was one (and advances past it).
@@ -1071,13 +1239,19 @@ function Clause:Translate(options)
 			self:Count(items[i])
 			existential = true
 			i = i + 1
-		elseif self:IsVerb(i) and not items[i].infl and not invertedAux then
+		elseif self:IsVerb(i) and not items[i].infl and not invertedAux and not options.relative then
 			local class = items[i].entry.class
-			if class ~= "i" and class ~= "na" and not items[i].entry.ja:find("ている$") then
+			if class ~= "i" and class ~= "na" and not IsStateVerb(items[i].entry) then
 				imperative = true
 			end
+		elseif options.relative and self:IsVerb(i) then
+			-- a relative clause or participle with its subject gapped: "standing there"
 		elseif self:IsNounPhraseStart(i) then
+			self.parsingSubject = true
+			self.parsingInvertedSubject = invertedAux ~= nil
 			subject, i = self:NounPhrase(i)
+			self.parsingSubject = false
+			self.parsingInvertedSubject = false
 		end
 	end
 
@@ -1088,7 +1262,7 @@ function Clause:Translate(options)
 		local handled, nextIndex = self:Auxiliary(i, form, state)
 		if handled then
 			i = nextIndex
-		elseif self:Pos(i) == "adv" and items[i + 1] and items[i + 1].kind == "word"
+		elseif self:Pos(i) == "adv" and self:W(i) ~= "too" and items[i + 1] and items[i + 1].kind == "word"
 			and (self:IsVerb(i + 1) or BE[self:W(i + 1)] or MODALS[self:W(i + 1)] or DO[self:W(i + 1)]
 				or HAVE[self:W(i + 1)] or NEGATORS[self:W(i + 1)] or self:Pos(i + 1) == "adv") then
 			self:Count(items[i])
@@ -1256,6 +1430,10 @@ function Clause:Translate(options)
 			if subText ~= "" then
 				if embeddedWh then
 					embedded = subText:gsub("の$", "") .. "か"
+				elseif verbItem.base == "wish" then
+					-- "I wish I could go" -> 行けたらいいのに
+					embedded = subText .. "といいのに"
+					state.wishOnly = true
 				else
 					embedded = subText .. "と"
 				end
@@ -1287,10 +1465,14 @@ function Clause:Translate(options)
 					purposeItems[#purposeItems + 1] = items[k]
 				end
 				local purpose = NewClause(purposeItems)
-				local ja = purpose:TranslateBare({ plain = true })
+				local tooTarget = complement and complement.too
+				local ja = purpose:TranslateBare(tooTarget and { mode = "can", negative = true, past = form.past } or { plain = true })
 				self.known = self.known + purpose.known
 				self.unknown = self.unknown + purpose.unknown
-				if verbItem and not MOTION_VERBS[verbItem.base] and #objects == 0 and not embedded then
+				if tooTarget then
+					-- "too tired to play" -> 疲れすぎて遊べません
+					complement.tooResult = ja
+				elseif verbItem and not MOTION_VERBS[verbItem.base] and #objects == 0 and not embedded then
 					-- "decided to postpone the meeting" -> 会議を延期することを決めました
 					local particle = verbItem.entry.particle
 						or ((verbItem.entry.class == "i" or verbItem.entry.class == "na") and "が" or "を")
@@ -1314,7 +1496,10 @@ function Clause:Translate(options)
 			elseif self:IsNounPhraseStart(i + 1) then
 				local np, nextIndex = self:NounPhrase(i + 1)
 				local particle = item.entry and item.entry.ja or "に"
-				if (w == "in" or w == "at" or w == "on") and (isCopula or verbParticle == "に") then
+				if w == "in" and complement and complement.superlative then
+					-- "the best set in the game" -> ゲームで一番いいセット
+					particle = "で"
+				elseif (w == "in" or w == "at" or w == "on") and (isCopula or verbParticle == "に") then
 					particle = "に"
 				elseif isCopula and particle:sub(-3) == "で" and #particle > 3 then
 					-- "near the wayshrine" with be/there is -> ウェイシュラインの近くに
@@ -1373,6 +1558,26 @@ function Clause:Translate(options)
 				-- "what are you looking for" -- a stranded preposition says nothing here.
 				i = i + 1
 			end
+		elseif w == "as" and self:Pos(i + 1) == "a" and self:W(i + 2) == "as" and self:IsNounPhraseStart(i + 3) then
+			-- "as tall as her mother" -> 母と同じくらい背が高い
+			self:Count(item)
+			self:Count(items[i + 1])
+			self:Count(items[i + 2])
+			local other, nextIndex = self:NounPhrase(i + 3)
+			complement = { adjective = items[i + 1].entry, adjectivePrefix = other.ja .. "と同じくらい", ja = "" }
+			i = nextIndex
+		elseif w == "too" and self:IsVerb(i + 1) and (IsStateVerb(items[i + 1].entry)
+			or items[i + 1].entry.class == "i" or items[i + 1].entry.class == "na") then
+			-- "too tired to play", "too busy": a verb that works as the adjective
+			self:Count(item)
+			self:Count(items[i + 1])
+			local entry = items[i + 1].entry
+			local adjective = IsStateVerb(entry) and { ja = entry.ja:sub(1, -10), class = "state" }
+				or { ja = entry.ja, class = entry.class }
+			complement = { too = true, ja = "", adjective = adjective }
+			isCopula = true
+			state.be = true
+			i = i + 2
 		elseif (pos == "adv" and self:Pos(i + 1) ~= "a") or pos == "wh" then
 			self:Count(item)
 			if item.entry.place and (isCopula or verbItem) then
@@ -1576,7 +1781,9 @@ function Clause:Translate(options)
 		end
 	end
 
-	if predicateExpression and not verbItem then
+	if state.wishOnly then
+		-- the wish is already said
+	elseif predicateExpression and not verbItem then
 		out[#out + 1] = predicateExpression
 	elseif verbItem then
 		local verbEntry = verbItem.entry
@@ -1603,7 +1810,15 @@ function Clause:Translate(options)
 			local adjective = complement.adjective
 			local inflection = complement.adjectiveInflection
 			local head = inflection == "comparative" and "もっと" or (inflection == "superlative" and "一番" or "")
-			if complement.too then
+			for _, part in pairs(phraseParts) do
+				if part.w == "than" then
+					-- "stronger than a healer" -> ヒーラーより強い: より already says "more"
+					head = ""
+				end
+			end
+			if complement.too and complement.tooResult then
+				out[#out + 1] = prefix .. TooStem(adjective) .. "て" .. complement.tooResult
+			elseif complement.too then
 				out[#out + 1] = prefix .. T.Masu(TooStem(adjective), form.past, form.negative)
 			elseif form.mode == "maybe" then
 				out[#out + 1] = prefix .. head .. adjective.ja .. "かもしれません"
@@ -1681,7 +1896,11 @@ function Clause:TranslateBare(form)
 	end
 	self.known = self.known + tail.known
 	self.unknown = self.unknown + tail.unknown
-	objects[#objects + 1] = T.PlainPredicate(verbItem.entry, form)
+	if form.mode then
+		objects[#objects + 1] = T.Predicate(verbItem.entry, form)
+	else
+		objects[#objects + 1] = T.PlainPredicate(verbItem.entry, form)
+	end
 	return Join(objects)
 end
 
@@ -1724,6 +1943,9 @@ local function SplitClauses(items)
 			if w == "when" and i == 1 and (BE[items[i + 1] and items[i + 1].w or ""] or DO[items[i + 1] and items[i + 1].w or ""]
 				or MODALS[items[i + 1] and items[i + 1].w or ""]) then
 				-- "when is the raid?" -- a question, not a subordinate clause.
+				split = false
+			elseif w == "when" and items[i - 1] and items[i - 1].entry and items[i - 1].entry.time then
+				-- "the day when we met" -- a relative clause on a time noun
 				split = false
 			elseif SPLIT_ONLY_BEFORE_CLAUSE[w] then
 				split = StartsClause(items, i + 1) and (#current.items > 0 or w == "so" or w == "then")
