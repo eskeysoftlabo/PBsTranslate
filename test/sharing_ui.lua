@@ -72,11 +72,30 @@ check('self excluded',ui:Resolve('@PinkBanther'),nil)
 addon.sv.userWords={ham='n:ヴォレンドラング'}
 list[2].templateData.finishedCallback()
 check('start needs confirmation',#wire,0)
+check('one saved entry displays one',shown.data.text:find('登録辞書 1件',1,true)~=nil,true)
+check('settings list also has one entry',#addon:WordListItems(),1)
+check('outgoing preview identifies entry',shown.data.text:find('ham = n:ヴォレンドラング',1,true)~=nil,true)
 Press(1)
 check('offer transmitted',wire[1].kind,S.OFFER)
+check('wire count is one',ui.session.active.count,1)
 check('timer active only in transfer',UpdateHandlers[addon.name..'Sharing']~=nil,true)
 ui.session:Cancel();wire={}
 check('idle timer removed',UpdateHandlers[addon.name..'Sharing'],nil)
+
+-- Updating the same key must not add a record; a distinct key must be visible.
+addon:StoreUserWord(' HAM ', 'n:ヴォレンドラング')
+ui:Start('@Peer')
+check('same normalized key still one',shown.data.text:find('登録辞書 1件',1,true)~=nil,true)
+addon:StoreUserWord('lessy','n:アレッシア砦')
+ui:Start('@Peer')
+check('two records display two',shown.data.text:find('登録辞書 2件',1,true)~=nil,true)
+check('second entry visible',shown.data.text:find('lessy = n:アレッシア砦',1,true)~=nil,true)
+-- The confirmed preview and actual transfer use the same snapshot.
+addon:DeleteUserWord('lessy')
+Press(1)
+check('approved snapshot count',ui.session.active.count,2)
+check('approved snapshot contains second entry',ui.session.active.data:find('lessy',1,true)~=nil,true)
+ui.session:Cancel();wire={}
 
 -- A remote sender drives the real protocol callback, followed by UI acceptance/import.
 local remoteWire={}

@@ -106,7 +106,16 @@ function UI:Start(peer)
     if not data then Say(errors[count]);return end
     -- Snapshot exactly what the sender approved; edits while confirming are excluded.
     local words=S.Decode(data,count)
-    self:Show(string.format(L("%s に自分の登録辞書 %d件を共有します。\n相手の承諾後に転送します。転送中はグループを維持してください。\nグループ通信のため、データはグループ全体へ配信され、選んだ相手のアドオンが取り込みます。", "Share %d personal entries with %s? The peer must accept first. Stay grouped during transfer. Data is broadcast to the whole group; the selected recipient imports it."), jp and peer or count, jp and count or peer),{
+    local keys,preview={},{}
+    for key in pairs(words) do keys[#keys+1]=key end
+    table.sort(keys)
+    for i=1,math.min(#keys,5) do
+        local key=keys[i]
+        preview[#preview+1]=key.." = "..words[key]
+    end
+    if #keys>5 then preview[#preview+1]=string.format(L("ほか%d件","%d more entries"),#keys-5) end
+    local details="\n\n"..L("共有する登録内容：","Entries to share:").."\n"..table.concat(preview,"\n")
+    self:Show(string.format(L("%s に自分の登録辞書 %d件を共有します。\n相手の承諾後に転送します。転送中はグループを維持してください。\nグループ通信のため、データはグループ全体へ配信され、選んだ相手のアドオンが取り込みます。", "Share %d personal entries with %s? The peer must accept first. Stay grouped during transfer. Data is broadcast to the whole group; the selected recipient imports it."), jp and peer or count, jp and count or peer)..details,{
         {text=L("共有する","Share"),callback=function()
             if IsUnitInCombat and IsUnitInCombat("player") then Say(errors.combat);return end
             local ok,reason=self.session:Start(peer,words)
@@ -213,7 +222,37 @@ function UI:Status()
     elseif self.session.review then self:Review()
     else Say(L("共有待機中。/pbshare @名前 で共有、review で受信内容、restore で復元。","Ready. /pbshare @name to share; review to inspect; restore to restore a backup.")) end
 end
+function UI:InitInteractMenu()
+    local object=PLAYER_TO_PLAYER
+    if not ZO_PostHook or not object or self.hooked[object]
+        or type(object.AddMenuEntry)~="function" or type(object.GetRadialMenu)~="function" then return end
+    -- Never wrap ShowPlayerInteractMenu: it invokes private console APIs and must
+    -- retain ESO's secure calling context. AddMenuEntry only appends a UI entry.
+    -- The native Trade entry has already checked ignore/communication restrictions.
+    ZO_PostHook(object,"AddMenuEntry",function(owner,text,_,enabled)
+        if text~=GetString(SI_PLAYER_TO_PLAYER_INVITE_TRADE) or not enabled then return end
+        local peer=owner.currentTargetDisplayName
+        if type(peer)~="string" or peer=="" or Name(peer)==Name(GetDisplayName()) then return end
+        local menu=owner:GetRadialMenu()
+        if not menu or type(menu.entries)~="table" then return end
+        local label=L("辞書データを共有","Share dictionary data")
+        for _,entry in ipairs(menu.entries) do
+            if entry.name==label then return end
+        end
+        local gamepad=IsInGamepadPreferredMode and IsInGamepadPreferredMode()
+        local normal=gamepad and "EsoUI/Art/HUD/Gamepad/gp_radialIcon_whisper_down.dds" or "EsoUI/Art/HUD/radialIcon_whisper_up.dds"
+        local selected=gamepad and normal or "EsoUI/Art/HUD/radialIcon_whisper_over.dds"
+        local icons={enabledNormal=normal,enabledSelected=selected,disabledNormal=normal,disabledSelected=selected}
+        owner:AddMenuEntry(label,icons,true,function()
+            -- Capture this account; the reticle may point elsewhere by execution.
+            Later(function() self:Start(peer) end)
+        end)
+    end)
+    self.hooked[object]=true
+end
+
 function UI:InitMenus()
+    self:InitInteractMenu()
     if not ZO_PostHook then return end
     -- Hook concrete objects: ESO's multiple inheritance can copy base methods.
     for _,name in ipairs({"CHAT_MENU_GAMEPAD","GROUP_LIST_GAMEPAD","ZO_FRIENDS_LIST_GAMEPAD","GUILD_ROSTER_GAMEPAD"}) do
