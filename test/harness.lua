@@ -1,4 +1,4 @@
--- Stub of just enough ESO client to run PB's TranslateTest outside the game.
+-- Stub of just enough ESO client to run PB's Translate outside the game.
 --
 -- CHAT_ROUTER is modelled on esoui/ingame/chatsystem/chathandlers.lua: a callback object whose
 -- AddSystemMessage fires "FormattedChatMessage" with no raw text, and a channel message that
@@ -105,7 +105,7 @@ function GetDisplayName() return "@PinkBanther" end
 function GetAddOnManager()
 	return {
 		GetNumAddOns = function() return 1 end,
-		GetAddOnInfo = function(_, i) return "PBsTranslateTest", ManifestTitle end,
+		GetAddOnInfo = function(_, i) return "PBsTranslate", ManifestTitle end,
 	}
 end
 
@@ -141,7 +141,7 @@ LibHarvensAddonSettings = {
 -- ---- load the add-on from its manifest ----------------------------------------------
 -- English strings only; run.lua checks separately that jp.lua has the same keys.
 ManifestFiles = {}
-for line in io.lines(DIR .. "/PBsTranslateTest.addon") do
+for line in io.lines(DIR .. "/PBsTranslate.addon") do
 	local title = line:match("^## Title: (.*)$")
 	if title then
 		ManifestTitle = title
@@ -155,4 +155,4 @@ for line in io.lines(DIR .. "/PBsTranslateTest.addon") do
 	end
 end
 
-Fire(EVENT_ADD_ON_LOADED, "PBsTranslateTest")
+Fire(EVENT_ADD_ON_LOADED, "PBsTranslate")

@@ -1,4 +1,4 @@
--- PB's TranslateTest -- splitting a chat line into words
+-- PB's Translate -- splitting a chat line into words
 --
 -- Chat text is not clean prose. It carries the client's own markup -- item links, colour
 -- codes, texture icons -- and it is typed fast, on a controller, by people who write "u r"

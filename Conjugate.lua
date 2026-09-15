@@ -1,4 +1,4 @@
--- PB's TranslateTest -- Japanese predicate building
+-- PB's Translate -- Japanese predicate building
 --
 -- English grammar is carried almost entirely by word order and auxiliaries; Japanese carries
 -- it on the end of the verb. So everything the parser learns about a clause -- tense,

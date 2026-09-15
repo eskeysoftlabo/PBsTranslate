@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: adjectives
+-- PB's Translate dictionary: adjectives
 --
 -- english=日本語/i  or  english=日本語/na
 -- Comparatives, superlatives and -ly adverbs are derived: stronger -> もっと強い,

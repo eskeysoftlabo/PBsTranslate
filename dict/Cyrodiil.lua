@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: Cyrodiil and PvP chat
+-- PB's Translate dictionary: Cyrodiil and PvP chat
 --
 -- Kept separately from ESO.lua; in Cyrodiil a PvP meaning wins over the PvE one: "push"
 -- is attacking a keep, "hold" is defending one, "tv" is Tel Var and not a television.

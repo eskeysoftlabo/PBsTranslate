@@ -1,9 +1,9 @@
--- PBS_TRANSLATE_TEST is nil if Main.lua bailed out early (engine missing or already loaded).
-if not PBS_TRANSLATE_TEST then
+-- PBS_TRANSLATE is nil if Main.lua bailed out early (engine missing or already loaded).
+if not PBS_TRANSLATE then
 	return
 end
 
-local addon = PBS_TRANSLATE_TEST
+local addon = PBS_TRANSLATE
 
 -- Translation controls. Adding words needs typing, so that stays a chat command
 -- (/pbtr add); the panel only says it exists.

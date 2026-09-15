@@ -1,4 +1,4 @@
--- PB's TranslateTest -- /en: Japanese to English for what the player sends (prototype)
+-- PB's Translate -- /en: Japanese to English for what the player sends (prototype)
 --
 --   /en チャルマン砦の正門が攻撃されている   ->   [en] chal fd lit
 --
@@ -52,7 +52,7 @@
 --
 -- Nothing here wraps or hooks client code.
 
-local addon = PBS_TRANSLATE_TEST
+local addon = PBS_TRANSLATE
 local T = PBsTranslate
 if not addon or not T or not T.TranslateJaToEn then
 	return

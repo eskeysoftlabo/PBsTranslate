@@ -1,4 +1,4 @@
-# PB’s TranslateTest 1.0.0
+# PB’s Translate 1.0.0
 
 チャット欄の英語の発言の下に、日本語訳を1行表示するESOアドオンです（自分の発言・他のプレイヤーの発言の両方）。
 
@@ -31,7 +31,7 @@ ESOのアドオンは外部サーバーに接続できないため、**翻訳は
 | `/pbtr remove english` | 追加した単語を削除（内蔵の訳に戻る） |
 | `/pbtr list` | 追加した単語の一覧 |
 
-設定 → アドオン → PB’s TranslateTest からも同じ設定を変更できます（LibHarvensAddonSettings がある場合）。
+設定 → アドオン → PB’s Translate からも同じ設定を変更できます（LibHarvensAddonSettings がある場合）。
 
 `/pbtr add` の日本語の前に品詞を付けると、文の中で文法どおりに使われます。
 
@@ -143,7 +143,8 @@ lua test/run.lua
 
 ## 導入
 
-`PBsTranslateTest` フォルダをアドオンフォルダに置いてください。
+`PBsTranslate` フォルダをアドオンフォルダに置いてください。
+1.0.0 でアドオンの名前を PB’s TranslateTest から PB’s Translate（フォルダ名 `PBsTranslate`）に変更しました。旧版の `PBsTranslateTest` フォルダは削除してください。名前が変わったため、旧版の設定（文字色・追加した単語など）は引き継がれません。
 LibHarvensAddonSettings（20106以上）があれば設定パネルが表示されます（なくてもチャットコマンドで動きます）。
 
 著者：PinkBanther

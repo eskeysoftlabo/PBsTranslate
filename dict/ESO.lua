@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: The Elder Scrolls Online
+-- PB's Translate dictionary: The Elder Scrolls Online
 --
 -- Loaded last, so the game's meaning of a word beats the everyday one: "tank" is a role,
 -- "keep" in a noun position is a fortress, "hm" is hard mode.

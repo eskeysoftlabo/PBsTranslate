@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: general nouns
+-- PB's Translate dictionary: general nouns
 --
 -- english=日本語. Plurals are found by taking the -s off, so only the singular is listed
 -- (irregular plurals are in Irregular.lua).

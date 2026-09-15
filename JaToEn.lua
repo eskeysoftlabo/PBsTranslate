@@ -1,4 +1,4 @@
--- PB's TranslateTest -- Japanese to English, for what the player sends (prototype)
+-- PB's Translate -- Japanese to English, for what the player sends (prototype)
 --
 -- The other direction of the add-on, and a much narrower one. Japanese has no spaces, drops
 -- its subjects and puts the verb last, so a general rule-based translator would produce

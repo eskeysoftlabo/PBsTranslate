@@ -1,4 +1,4 @@
--- PB's TranslateTest -- from English word order to Japanese word order
+-- PB's Translate -- from English word order to Japanese word order
 --
 -- This is not machine translation and does not pretend to be. It is a small rule-based
 -- rewriter that knows the shapes chat sentences actually come in:

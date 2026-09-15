@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: the function words
+-- PB's Translate dictionary: the function words
 --
 -- Pronouns, determiners, prepositions and question words. The grammar handles be/do/have,
 -- the modals, "not", "to" and the articles by spelling (Grammar.lua); everything else it

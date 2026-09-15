@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: irregular forms
+-- PB's Translate dictionary: irregular forms
 --
 -- form = base inflection. Regular -s/-ed/-ing/-er/-est are worked out in Lexicon.lua and
 -- never need a line here. "past" covers the past participle too: the grammar reads it as

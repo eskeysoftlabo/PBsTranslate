@@ -1,4 +1,4 @@
--- PB's TranslateTest -- the dictionary
+-- PB's Translate -- the dictionary
 --
 -- An add-on cannot reach a server, so every word it can translate ships inside it. The word
 -- lists live in dict/*.lua as plain "english=japanese" lines, one block per part of speech,

@@ -1,4 +1,4 @@
--- Tests for PB's TranslateTest.
+-- Tests for PB's Translate.
 --
 --   lua test/run.lua     (from the add-on folder; any Lua 5.1+)
 --
@@ -33,7 +33,7 @@ end
 
 dofile(HERE .. "/harness.lua")
 
-local addon = PBS_TRANSLATE_TEST
+local addon = PBS_TRANSLATE
 local T = PBsTranslate
 
 -- Defaults and one-time migration from the previous 60% default.

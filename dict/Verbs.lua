@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: verbs
+-- PB's Translate dictionary: verbs
 --
 -- english=辞書形/class/particle
 --

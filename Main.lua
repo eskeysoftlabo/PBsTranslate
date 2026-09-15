@@ -1,4 +1,4 @@
--- PB's TranslateTest
+-- PB's Translate
 -- Author: PinkBanther
 --
 -- English chat, with a Japanese line under it.
@@ -33,7 +33,7 @@
 -- output are still skipped.
 -- ---------------------------------------------------------------------------------------
 
-if PBS_TRANSLATE_TEST then
+if PBS_TRANSLATE then
 	return
 end
 
@@ -43,13 +43,13 @@ if not T or not T.Translate then
 end
 
 local addon = {
-	name = "PBsTranslateTest",
+	name = "PBsTranslate",
 	engine = T,
 }
 
 local em = EVENT_MANAGER
 
-local DISPLAY_NAME = "PB’s TranslateTest"
+local DISPLAY_NAME = "PB’s Translate"
 local AUTHOR = "PinkBanther"
 local SLASH = "/pbtr"
 local TRANSLATE_SLASH = "/jp"
@@ -817,7 +817,7 @@ local function OnAddOnLoaded(_, name)
 	em:UnregisterForEvent(addon.name, EVENT_ADD_ON_LOADED)
 
 	Step("saved variables", function()
-		addon.sv = ZO_SavedVars:NewAccountWide("PBsTranslateTest_Data", 1, nil, DEFAULTS)
+		addon.sv = ZO_SavedVars:NewAccountWide("PBsTranslate_Data", 1, nil, DEFAULTS)
 	end)
 	if not addon.sv then
 		addon.sv = {}
@@ -850,4 +850,4 @@ end
 
 em:RegisterForEvent(addon.name, EVENT_ADD_ON_LOADED, OnAddOnLoaded)
 
-PBS_TRANSLATE_TEST = addon
+PBS_TRANSLATE = addon

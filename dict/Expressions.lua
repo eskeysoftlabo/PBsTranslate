@@ -1,4 +1,4 @@
--- PB's TranslateTest dictionary: fixed expressions and chat shorthand
+-- PB's Translate dictionary: fixed expressions and chat shorthand
 --
 -- Each of these is translated as a whole and set apart from the rest of the sentence with
 -- a comma: "hi, can you help me" -> こんにちは、手伝ってもらえますか.

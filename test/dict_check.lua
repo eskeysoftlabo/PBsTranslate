@@ -1,4 +1,4 @@
--- Dictionary lint for PB's TranslateTest.
+-- Dictionary lint for PB's Translate.
 --
 --   lua test/dict_check.lua          (from the add-on folder)
 --
