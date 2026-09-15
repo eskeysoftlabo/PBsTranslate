@@ -149,7 +149,7 @@ TRANSLATION_CASES = {
 	{ "turn left at the bridge", "橋で左に曲がってください" },
 	{ "the government should protect the environment", "政府は環境を守るべきです" },
 	{ "we need to reduce the pollution", "私たちは汚染を減らす必要があります" },
-	{ "please fill out this form", "これを記入してください" },
+	{ "please fill out this form", "これを記入してください、form" },
 	{ "can you recommend a good restaurant?", "いいレストランをおすすめしてもらえますか？" },
 	{ "the accident happened suddenly", "事故は突然起こりました" },
 	{ "the company decided to postpone the meeting", "会社は会議を延期することを決めました" },
@@ -207,7 +207,7 @@ TRANSLATION_CASES = {
 	{ "it is too far to walk", "それは遠すぎて歩けません" },
 	{ "I wish I could go", "私は私が行けるといいのに" },
 	{ "what do you think about this build?", "このビルドについてどう思いますか？" },
-	{ "go to chal i will port", "チャルマン砦に行ってください" },
+	{ "go to chal i will port", "チャルマン砦に行ってください、私はポートします" },
 	-- Online game slang (0.4.22)
 	{ "nt", "ドンマイ" },
 	{ "gg ez", "楽勝" },
@@ -363,4 +363,13 @@ TRANSLATION_CASES = {
 	{ "please don't attack", "攻撃しないでください" },
 	{ "when you must not attack", "あなたが攻撃してはいけないとき" },
 	{ "when you don't have to attack", "あなたが攻撃しなくてもいいとき" },
+	-- Omitted clause boundaries and visible fallback for unparsed trailing words.
+	{ "defend roe hk will bone", "ローベック砦を防衛してください、砦を修理して味方を回復し、防衛を維持してください、全滅させます" },
+	{ "defend roe hk will not bone", "ローベック砦を防衛してください、砦を修理して味方を回復し、防衛を維持してください、全滅させません" },
+	{ "defend roe hk can bone", "ローベック砦を防衛してください、砦を修理して味方を回復し、防衛を維持してください、全滅させられます" },
+	{ "defend roe hk will quickly bone", "ローベック砦を防衛してください、砦を修理して味方を回復し、防衛を維持してください、速く全滅させます" },
+	{ "defend roe bone", "ローベック砦を防衛してください、bone" },
+	{ "defend roe will", "ローベック砦を防衛してください、will" },
+	{ "I will defend roe", "私はローベック砦を防衛します" },
+
 }

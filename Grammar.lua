@@ -1448,13 +1448,32 @@ function Clause:Translate(options)
 	local complement
 	local isCopula = not verbItem and (state.be or existential or form.mode == "become")
 	local verbParticle = verbItem and verbItem.entry.particle
+	local remainder = {}
 
 	while items[i] do
 		local item = items[i]
 		local w = item.kind == "word" and item.w or nil
 		local pos = self:Pos(i)
 
-		if item.kind == "punct" then
+		-- Short chat can omit the subject/conjunction of a second clause:
+		-- "defend roe [hk] will bone". Once a verb and its object were read,
+		-- a modal followed by a verb starts a separate predicate, not another object.
+		local modalIndex = SUBJECT_PRONOUNS[w or ""] and i + 1 or i
+		local nextVerb = modalIndex + 1
+		while items[nextVerb] and (NEGATORS[self:W(nextVerb) or ""] or self:Pos(nextVerb) == "adv") do
+			nextVerb = nextVerb + 1
+		end
+		if MODALS[self:W(modalIndex) or ""] and verbItem and (#objects > 0 or #phrases > 0)
+			and self:IsVerb(nextVerb) then
+			local tail = {}
+			for k = i, #items do tail[#tail + 1] = items[k] end
+			local clause = NewClause(tail)
+			local translated = clause:Translate()
+			self.known = self.known + clause.known
+			self.unknown = self.unknown + clause.unknown
+			remainder[#remainder + 1] = translated
+			i = #items + 1
+		elseif item.kind == "punct" then
 			i = i + 1
 		elseif (pos == "prep" or w == "to") and w ~= nil then
 			self:Count(item)
@@ -1637,6 +1656,10 @@ function Clause:Translate(options)
 		else
 			if item.kind == "word" then
 				self:Count(item)
+				-- Knowing a word does not mean we parsed it. Keep unhandled words visible.
+				if not (CONJUNCTIONS[w or ""] and #prefix > 0 and #suffix > 0 and not verbItem and not subject) then
+					remainder[#remainder + 1] = item.orig or item.w
+				end
 			end
 			i = i + 1
 		end
@@ -1851,6 +1874,9 @@ function Clause:Translate(options)
 	end
 	if #suffix > 0 then
 		text = Join({ text, table.concat(suffix, "、") }, text ~= "" and "、" or nil)
+	end
+	if #remainder > 0 then
+		text = Join({ text, table.concat(remainder, " ") }, text ~= "" and "、" or nil)
 	end
 	self.question = question
 	return text

@@ -514,6 +514,7 @@ unkillable=倒せない/i
 ]])
 
 D("v", [[
+bone=全滅させる/1/を
 push=攻める/1
 push in=攻め込む/5
 hold=守る/5
@@ -572,6 +573,7 @@ set up siege=攻城兵器を置く/5
 ]])
 
 D("x", [[
+hk=砦を修理して味方を回復し、防衛を維持してください
 fd down=正門が破られました
 front door down=正門が破られました
 bd down=裏門が破られました

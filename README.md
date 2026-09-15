@@ -1,4 +1,4 @@
-# PB’s TranslateTest 0.4.23
+# PB’s TranslateTest 0.4.24
 
 チャット欄の英語の発言の下に、日本語訳を1行表示するESOアドオンです（自分の発言・他のプレイヤーの発言の両方）。
 
@@ -188,3 +188,5 @@ in the United States and/or other countries. All rights reserved.
 1〜8 はいずれも PS5 でクラッシュしませんでした（0.4.14〜0.4.15）。
 
 テスト: `lua test/outgoing.lua`
+
+0.4.24では、`defend roe hk will bone` のように句読点・接続詞が省略された発言の後半（助動詞＋動詞）を別の節として翻訳します。主動詞の後で解析できなかった単語は、読み飛ばさず原文で末尾に残します。条件関係や省略された主語を推測して補うものではありません。
