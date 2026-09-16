@@ -320,6 +320,17 @@ local PoliteOnlyModes = { imperative = true, request = true, lets = true }
 
 function T.Predicate(entry, form)
 	form = form or {}
+	if form.aspect and entry.class and entry.class ~= "i" and entry.class ~= "na" and entry.class ~= "rel" then
+		local nested = {}
+		for key, value in pairs(form) do nested[key] = value end
+		nested.aspect = nil
+		local ja = form.aspect == "passive" and (T.PassiveStem(entry.ja, entry.class) .. "る")
+			or (TeForm(entry.ja, entry.class) .. "いる")
+		return T.Predicate({ja = ja, class = "1"}, nested)
+	end
+	if form.conditional and form.mode == "can" then
+		return T.PlainPredicate({ja = PotentialStem(entry.ja, entry.class) .. "る", class = "1"}, form)
+	end
 	if form.plain and form.mode and not PoliteOnlyModes[form.mode] and entry.class ~= "i" and entry.class ~= "na" then
 		local polite = T.Predicate(entry, { past = form.past, negative = form.negative, mode = form.mode })
 		return ToPlain(polite)
@@ -367,19 +378,26 @@ function T.Predicate(entry, form)
 			if mode == "must" then
 				return TeForm(word, class) .. "はいけません"
 			end
-			return NaiStem(word, class) .. "なくてもいいです"
+			return NaiStem(word, class) .. (past and "なくてもよかったです" or "なくてもいいです")
 		end
 		return NaiStem(word, class) .. (past and "なければなりませんでした" or "なければなりません")
 	elseif mode == "should" then
-		return word .. (negative and "べきではありません" or "べきです")
+		return word .. (past and (negative and "べきではありませんでした" or "べきでした") or (negative and "べきではありません" or "べきです"))
 	elseif mode == "need" then
-		return word .. (negative and "必要はありません" or "必要があります")
+		return word .. (past and (negative and "必要はありませんでした" or "必要がありました") or (negative and "必要はありません" or "必要があります"))
 	elseif mode == "try" then
 		return Masu(TeForm(word, class) .. "み", past, negative)
 	elseif mode == "intend" then
 		return word .. (negative and "つもりはありません" or "つもりです")
 	elseif mode == "maybe" then
-		return (negative and (NaiStem(word, class) .. "ない") or word) .. "かもしれません"
+		return T.PlainPredicate(entry, {past = past, negative = negative}) .. "かもしれません"
+	elseif mode == "could_perfect" then
+		return ToPlain(Masu(PotentialStem(word, class), true, false))
+			.. (negative and "はずがありません" or "かもしれません")
+	elseif mode == "deduction" then
+		return T.PlainPredicate(entry, {past = past, negative = negative}) .. "に違いありません"
+	elseif mode == "counterfactual" then
+		return T.PlainPredicate(entry, {past = past, negative = negative}) .. "でしょう"
 	elseif mode == "likes" then
 		return word .. (negative and "のは好きではありません" or "のが好きです")
 	elseif mode == "experience" then

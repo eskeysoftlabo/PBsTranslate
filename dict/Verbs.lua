@@ -1494,3 +1494,30 @@ located in=ある/5/に
 based on=基づいている/1/に
 used for=使われている/1/に
 ]])
+
+-- Slang.net chat vocabulary (2026-09-16); sources and exclusions: SLANG_SOURCES.md
+D("v", [[
+pubstomp=野良チームを圧倒する/s
+pwn=圧倒する/s
+mald=激怒する/s
+merk=圧倒する/s
+murk=圧倒する/s
+throw the game=わざと負ける/1
+dunk on=馬鹿にする/s
+flex=自慢する/s
+mooch=ただ乗りする/s
+stahp=止める/1
+chillax=のんびりする/s
+clap back=言い返す/5
+clapback=言い返す/5
+derail=話題を脱線させる/1
+finessing=だまして手に入れる/1
+gaslighting=相手の認識を疑わせて操る/5
+gatekeep=新規の人を排除する/s
+yapping=しゃべりすぎる/1
+]])
+
+-- Escape a location: do not read get as receive in this construction.
+D("v", [[
+get out of=出る/1/から
+]])

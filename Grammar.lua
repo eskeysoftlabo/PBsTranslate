@@ -40,7 +40,7 @@ local NEGATORS = { ["not"] = true, never = true }
 local ARTICLES = { a = true, an = true, the = true }
 local DEMONSTRATIVE_DET = { this = "この", that = "その", these = "これらの", those = "それらの" }
 local INDEFINITE_PRONOUNS = {
-	someone = true, somebody = true, anyone = true, anybody = true, nobody = true,
+	someone = true, somebody = true, anyone = true, anybody = true, nobody = true, ["no one"] = true,
 	something = true, anything = true, nothing = true, who = true,
 }
 local SUBJECT_PRONOUNS = { i = true, you = true, we = true, they = true, he = true, she = true, it = true }
@@ -239,6 +239,7 @@ local CLAUSE_OPENERS = {
 	can = true, could = true, will = true, would = true, ["do"] = true, does = true, did = true,
 	is = true, are = true, am = true, please = true, pls = true, ["let's"] = true,
 	lol = true, guys = true, everyone = true, all = true, ["and"] = true, but = true, so = true,
+	["then"] = true,
 }
 
 local function Tag(tokens)
@@ -292,7 +293,8 @@ local function Tag(tokens)
 							local before = items[#items]
 							if entry and before and before.kind == "word" and not (before.entry and before.entry.pos == "x")
 								and not CONJUNCTIONS[before.w] and not CONJUNCTIONS[words[1]] and not BE[before.w] then
-								entry = nil
+								-- Preserve the conjugatable reading in "do not hard stack".
+								entry = entry.alts and (entry.alts.v or entry.alts.n) or nil
 							end
 						end
 						if entry then
@@ -394,8 +396,8 @@ local function Disambiguate(items)
 		if not T.userLexicon[item.w] then
 			if item.w == "no" and following and following.kind == "word" then
 				item.entry = { pos = "det", ja = "", negative = true }
-			elseif item.w == "nobody" or item.w == "nothing" then
-				item.entry = { pos = "pn", ja = item.w == "nobody" and "誰も" or "何も", negative = true }
+			elseif item.w == "nobody" or item.w == "no one" or item.w == "nothing" then
+				item.entry = { pos = "pn", ja = item.w ~= "nothing" and "誰も" or "何も", negative = true }
 			elseif item.w == "enough" and following and T.As(following.entry, "n") then
 				item.entry = { pos = "det", ja = "十分な" }
 			elseif item.w == "more" and following and T.As(following.entry, "n") then
@@ -423,9 +425,21 @@ local function Disambiguate(items)
 		if entry and entry.alts then
 			local previous, following = items[index - 1], items[index + 1]
 			local wantPos
+			-- Perfect auxiliaries can be separated from their participle by adverbs.
+			local auxIndex = index - 1
+			while items[auxIndex] and items[auxIndex].kind == "word" and
+				(NEGATORS[items[auxIndex].w] or items[auxIndex].entry and items[auxIndex].entry.pos == "adv") do
+				auxIndex = auxIndex - 1
+			end
+			local perfectAux = items[auxIndex] and HAVE[items[auxIndex].w]
 			local atStart = not previous or previous.kind == "punct"
 				or (previous.kind == "word" and CONJUNCTIONS[previous.w])
-			if item.infl == "ing" and previous and (previous.base == "keep" or previous.base == "stop") and T.As(entry, "v") then
+			if item.altInflection == "past" and previous and previous.entry and previous.entry.pos == "n"
+				and following and ARTICLES[following.w] then
+				wantPos = "v"
+			elseif perfectAux and (item.infl == "past" or item.altInflection == "past") and entry.alts.v then
+				wantPos = "v"
+			elseif item.infl == "ing" and previous and (previous.base == "keep" or previous.base == "stop") and T.As(entry, "v") then
 				wantPos = "v"
 			elseif following and following.kind == "word" and following.infl == "ing"
 				and (item.base == "keep" or item.base == "stop") and T.As(entry, "v") then
@@ -470,7 +484,8 @@ local function Disambiguate(items)
 				elseif (HAVE[w] or BE[w]) and (item.infl == "past" or item.infl == "ing") and (entry.pos == "v" or entry.alts.v) then
 					-- "has changed", "is changing": the participle, not the noun
 					wantPos = "v"
-				elseif SUBJECT_PRONOUNS[w] or MODALS[w] or VERB_CONTEXT_WORDS[w] or DO[w] then
+				elseif SUBJECT_PRONOUNS[w] or MODALS[w] or VERB_CONTEXT_WORDS[w] or DO[w]
+					or previous.entry and previous.entry.pos == "pn" and previous.entry.negative then
 					wantPos = "v"
 				elseif previous.entry and NOUN_CONTEXT_POS[previous.entry.pos]
 					and not (previous.entry.pos == "v" and entry.pos == "a") then
@@ -716,7 +731,13 @@ function Clause:NounPhrase(i)
 			self:Count(items[i])
 		end
 
-		if item.kind == "num" and info.countSuffix and self:Entry(i + 1)
+		if w == "left" and info.head and (info.countSuffix or info.negative) and not items[i + 1]
+			and not T.userLexicon.left then
+			self:Count(item)
+			info.remaining = true
+			i = i + 1
+			break
+		elseif item.kind == "num" and info.countSuffix and self:Entry(i + 1)
 			and self:Pos(i + 1) == "n" and not self:Entry(i + 1).unit and not self:Entry(i + 1).time then
 			-- "1 tank 2 dps": a fresh quantity starts the next member of a list.
 			break
@@ -771,6 +792,7 @@ function Clause:NounPhrase(i)
 			i = i + 1
 		elseif entry and entry.pos == "det" then
 			info.negative = info.negative or entry.negative
+			info.sufficient = info.sufficient or w == "enough" and not T.userLexicon.enough
 			self:Count(item)
 			parts[#parts + 1] = (w == "more" and info.negative) and "これ以上の" or entry.ja
 			info.determined = true
@@ -1113,6 +1135,18 @@ function Clause:Auxiliary(i, form, state)
 			return true, i + 2
 		end
 		local nextItem = self.items[i + 1]
+		if state.modal then
+			local k = i + 1
+			while self:Pos(k) == "adv" or NEGATORS[self:W(k) or ""] do k = k + 1 end
+			local candidate = self.items[k]
+			if candidate and (candidate.w == "been" or candidate.infl == "past" and self:IsVerb(k)) then
+				state.modalPerfect = true
+				form.past = true
+				if state.modal == "could" then form.mode = "could_perfect"
+				elseif state.modal == "must" then form.mode = "deduction"
+				elseif state.modal == "would" then form.mode = "counterfactual" end
+			end
+		end
 		-- "have already won": look past adverbs for the participle
 		-- "have never seen", "have you ever been": experience -> ～たことがある
 		local k, experience = i + 1, false
@@ -1127,6 +1161,11 @@ function Clause:Auxiliary(i, form, state)
 			self.items[k] = { kind = "word", w = "been:go", orig = "been", infl = "past", base = "go",
 				entry = { pos = "v", ja = "行く", class = "5", particle = "に" } }
 		end
+		if self:W(k) == "been" then
+			self:Count(item)
+			form.past = form.past or HAVE[w].past
+			return true, i + 1
+		end
 		if k > i + 1 and self.items[k] and self.items[k].infl == "past" and self:IsVerb(k) then
 			self:Count(item)
 			if experience then
@@ -1134,11 +1173,6 @@ function Clause:Auxiliary(i, form, state)
 			else
 				form.past = true
 			end
-			return true, i + 1
-		end
-		if nextItem and nextItem.w == "been" then
-			-- "have been playing" is still going on: 遊んでいます
-			self:Count(item)
 			return true, i + 1
 		end
 		if nextItem and (nextItem.infl == "past" or BE[nextItem.w or ""] or NEGATORS[nextItem.w or ""])
@@ -1194,6 +1228,40 @@ function Clause:Translate(options)
 		form[key] = value
 	end
 	local state = {}
+
+	if (self:W(1) == "no one" or self:W(1) == "nobody") and self:W(2) == "left" and not items[3]
+		and not options.subordinate and not T.userLexicon[self:W(1)] and not T.userLexicon.left then
+		self:Count(items[1]); self:Count(items[2])
+		self.question = options.questionMark
+		return "誰も残っていません" .. (options.questionMark and "か" or "")
+	end
+
+	-- Resource depletion reports, not spatial "out of the keep".
+	do
+		local j, owner, past, negative = 1, "", false, false
+		if SUBJECT_PRONOUNS[self:W(j) or ""] and self:Entry(j) and not T.userLexicon[self:W(j)] then
+			owner = self:Entry(j).ja .. "は"
+			j = j + 1
+			if BE[self:W(j) or ""] then past = BE[self:W(j)].past; j = j + 1 end
+		end
+		if self:W(j) == "not" then negative = true; j = j + 1 end
+		if not options.subordinate and self:W(j) == "out of" and not T.userLexicon["out of"] and self:IsNounPhraseStart(j + 1) then
+			local probeItems = {}
+			for k, item in ipairs(items) do
+				probeItems[k] = {}
+				for key, value in pairs(item) do probeItems[k][key] = value end
+			end
+			local probe = NewClause(probeItems)
+			local np, nextIndex = probe:NounPhrase(j + 1)
+			local resources = { ["マジカ"] = true, ["スタミナ"] = true, ["ポーション"] = true,
+				["魂石"] = true, ["ゴールド"] = true, ["お金"] = true, ["マナ"] = true }
+			if np.head and resources[np.head.ja] and not np.unknownHead and not items[nextIndex] then
+				for k = 1, #items do self:Count(items[k]) end
+				self.question = options.questionMark
+				return owner .. np.ja .. "が" .. T.Predicate({ja = "尽きている", class = "1"}, {past = past, negative = negative}) .. (options.questionMark and "か" or "")
+			end
+		end
+	end
 
 	-- Elliptical availability questions: require a question mark, a known noun and
 	-- a fully parsed tail. "take any ..." and unknown player names are not inferred.
@@ -1377,7 +1445,7 @@ function Clause:Translate(options)
 		local handled, nextIndex = self:Auxiliary(i, form, state)
 		if handled then
 			i = nextIndex
-		elseif self:Pos(i) == "adv" and self:W(i) ~= "too" and items[i + 1] and items[i + 1].kind == "word"
+		elseif self:Pos(i) == "adv" and not self:Entry(i).place and self:W(i) ~= "too" and items[i + 1] and items[i + 1].kind == "word"
 			and (self:IsVerb(i + 1) or BE[self:W(i + 1)] or MODALS[self:W(i + 1)] or DO[self:W(i + 1)]
 				or HAVE[self:W(i + 1)] or NEGATORS[self:W(i + 1)] or self:Pos(i + 1) == "adv") then
 			self:Count(items[i])
@@ -1398,9 +1466,11 @@ function Clause:Translate(options)
 		local item = items[i]
 		local isBeHelper = state.be
 		if isBeHelper and item.infl == "ing" then
+			if form.mode then form.aspect = "progressive" end
 			form.mode = form.mode or "progressive"
 			verbItem = item
 		elseif isBeHelper and item.infl == "past" then
+			if form.mode then form.aspect = "passive" end
 			form.mode = form.mode or "passive"
 			verbItem = item
 		elseif isBeHelper and item.infl == nil then
@@ -1474,8 +1544,21 @@ function Clause:Translate(options)
 		i = i + 2
 	end
 
+	-- Past inability is common in post-fight reports. Preserve requests, future
+	-- contexts and conditional clauses, where could is not necessarily past.
+	if state.modal == "could" and not state.modalPerfect and not question and not options.subordinate then
+		local future, pastCue = false, false
+		for _, token in ipairs(items) do
+			if token.w == "tomorrow" or token.w == "tonight" or token.w == "later" or token.w == "next" or token.w == "now" then future = true end
+			if token.w == "yesterday" or token.w == "ago" then pastCue = true end
+		end
+		if not future and (form.negative or pastCue) then form.past = true end
+	end
+
+	if question and form.mode == "could_perfect" then form.mode = "can" end
+
 	-- can you / could you / will you  -> ～てもらえますか
-	if question and subject and verbItem and REQUEST_SUBJECTS[subject.pronoun or ""]
+	if question and not state.modalPerfect and subject and verbItem and REQUEST_SUBJECTS[subject.pronoun or ""]
 		and (state.modal == "can" or state.modal == "could" or state.modal == "will" or state.modal == "would") then
 		form.mode = "request"
 		-- "can someone ..." keeps who is being asked: 誰か、～てもらえますか
@@ -1827,6 +1910,37 @@ function Clause:Translate(options)
 
 	local hasPredicate = verbItem or existential or isCopula or predicateExpression
 
+	-- Elliptical counts, including "only two enemies left".
+	local remaining = not hasPredicate and (subject and subject.remaining and #objects == 0 and subject
+		or not subject and #objects == 1 and objects[1].remaining and objects[1])
+	if remaining and not options.subordinate and #phrases == 0 and #remainder == 0 then
+		local text = remaining.ja:gsub("なし$", "") .. (state.onlyObject and "だけ" or "")
+		text = table.concat(adverbs) .. text .. (remaining.negative and "は残っていません" or "が残っています")
+		if question or options.questionMark then text = text .. "か" end
+		self.question = question or options.questionMark
+		return Join({table.concat(prefix, "、"), text, table.concat(suffix, "、")}, "、")
+	end
+
+	-- Possessing people means having them available, not owning an object.
+	if verbItem and verbItem.base == "have" and not T.userLexicon.have and #objects == 1 then
+		local availableRoles = { ["ヒーラー"] = true, ["タンク"] = true, ["DPS"] = true, ["DD"] = true,
+			["プレイヤー"] = true, ["メンバー"] = true, ["仲間"] = true, ["友達"] = true }
+		state.haveAnimate = objects[1].head and availableRoles[objects[1].head.ja]
+		state.insufficient = form.negative and objects[1].sufficient
+		if state.insufficient then objects[1].ja = objects[1].ja:gsub("^十分な", "") end
+	end
+
+	-- "no healers online" reports absence, not that particular healers are offline.
+	local onlineReport = complement or (#objects == 1 and objects[1])
+	if (not verbItem and onlineReport and onlineReport.ja == "オンライン" or verbItem and verbItem.base == "online")
+		and subject and subject.negative and IsAnimate(subject.head) and not form.mode
+		and #adverbs == 0 and #(state.preAdverbs or {}) == 0 and #phrases == 0 and #remainder == 0 and not T.userLexicon.online then
+		local text = "オンラインの" .. subject.ja:gsub("なし$", "") .. "は" .. T.Predicate({ja = "いる", class = "1"}, {negative = true, past = form.past})
+		if question or options.questionMark then text = text .. "か" end
+		self.question = question or options.questionMark
+		return Join({table.concat(prefix, "、"), text, table.concat(suffix, "、")}, "、")
+	end
+
 	-- "rss down", "fd open": a noun and a lone adjective with no verb between them
 	if not hasPredicate and subject and #objects == 1 and objects[1].adjective and #phrases == 0 then
 		isCopula = true
@@ -1887,6 +2001,7 @@ function Clause:Translate(options)
 	if subject and subject.ja ~= "" and form.mode ~= "request" then
 		if hasPredicate then
 			local particle = (subject.negative and subject.pronoun) and "" or ((options.subordinate or INDEFINITE_PRONOUNS[subject.pronoun or ""]) and "が" or "は")
+			if verbItem and verbItem.base == "have" and objects[1] and (objects[1].remaining or state.haveAnimate) and not T.userLexicon.have then particle = "には" end
 			if verbItem and verbItem.base == "need" and not subject.negative and not T.userLexicon.need then
 				if options.questionMark and INDEFINITE_PRONOUNS[subject.pronoun or ""] then
 					particle = "、"
@@ -1922,6 +2037,7 @@ function Clause:Translate(options)
 
 	local isStative = verbItem and (verbItem.entry.class == "i" or verbItem.entry.class == "na")
 	local objectParticle = verbParticle or (isStative and "が" or "を")
+	if verbItem and verbItem.base == "have" and objects[1] and (objects[1].remaining or state.haveAnimate or state.insufficient) and not T.userLexicon.have then objectParticle = "が" end
 	if state.onlyObject and objects[1] then objects[1].ja = objects[1].ja .. "だけ" end
 	if verbItem and verbItem.base == "ask" and objects[1] and objects[1].pronoun then objectParticle = "に" end
 
@@ -1997,6 +2113,12 @@ function Clause:Translate(options)
 		out[#out + 1] = predicateExpression
 	elseif verbItem then
 		local verbEntry = verbItem.entry
+		if verbItem.base == "have" and objects[1] and objects[1].remaining and not T.userLexicon.have then
+			verbEntry = {ja = "残っている", class = "1"}
+		elseif state.haveAnimate then
+			verbEntry = {ja = "いる", class = "1"}
+		end
+		if state.insufficient then verbEntry = {ja = "足りる", class = "1"} end
 		if options.subordinate and verbItem.base == "ready" and verbEntry.ja == "準備ができている"
 			and not T.userLexicon.ready then
 			verbEntry = { ja = "準備できる", class = "1" }
@@ -2157,6 +2279,10 @@ StartsClause = function(items, i)
 		return true
 	end
 	if item.entry and item.entry.pos == "v" and not item.infl then
+		return true
+	end
+	-- A complete fixed call can start the next clause: "stop dps then rez me".
+	if item.phrase and item.entry and item.entry.pos == "x" then
 		return true
 	end
 	-- "and my friend is..." -- a noun phrase followed by a verb or auxiliary.
