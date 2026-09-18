@@ -40,7 +40,7 @@ end
 local originalBuilder=object.ShowPlayerInteractMenu
 local started
 ui.Start=function(_,peer) started=peer end
-ui:InitMenus();ui:InitMenus()
+ui:InitInteractMenu();ui:InitInteractMenu()
 check('protected builder identity unchanged',object.ShowPlayerInteractMenu,originalBuilder)
 check('original return preserved',object:ShowPlayerInteractMenu(false),'original return')
 check('item present before Show',object.visibleEntries,3)
@@ -73,7 +73,7 @@ check('keyboard icon',object.entries[2].icons.enabledNormal,'EsoUI/Art/HUD/radia
 object.entries={};object:AddMenuEntry('Cancel',{},true)
 check('other response menus untouched',#object.entries,1)
 -- The object may be initialized only after add-on load; initialization stays retryable.
-PLAYER_TO_PLAYER=nil;ui:InitMenus();PLAYER_TO_PLAYER=object;ui:InitMenus()
+PLAYER_TO_PLAYER=nil;ui:InitInteractMenu();PLAYER_TO_PLAYER=object;ui:InitInteractMenu()
 object:ShowPlayerInteractMenu(false)
 check('no duplicate hooks after reactivation',object.visibleEntries,3)
 object:AddMenuEntry('Trade',{},true,function() end)

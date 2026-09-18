@@ -1,4 +1,4 @@
--- Integration of the ESO adapter with menu/dialog/LGB API-shaped test doubles.
+-- Integration of the ESO adapter with panel/dialog/LGB API-shaped test doubles.
 ADDON_DIR='.'
 dofile('test/harness.lua')
 local addon,S=PBS_TRANSLATE,PBsTranslateShare
@@ -27,22 +27,10 @@ local function Press(index)
     check('localized label',type(definition.text(dialog)),'string')
     definition.callback(dialog)
 end
-function ZO_PostHook(object,name,hook)
-    local old=object[name]
-    object[name]=function(...) old(...);hook(...) end
-end
-CHAT_MENU_GAMEPAD={socialData={displayName='@Peer'}}
-function CHAT_MENU_GAMEPAD:PopulateOptionsList(list) list[#list+1]={original=true} end
-function CHAT_MENU_GAMEPAD:BuildOptionEntry(_,label,callback,finished)
-    return {templateData={text=label,callback=callback,finishedCallback=finished}}
-end
-function CHAT_MENU_GAMEPAD:AddOption(list,entry) list[#list+1]=entry end
-local callbacks,menu={},{}
-LibCustomMenu={CATEGORY_LATE=3}
-for _,method in ipairs({'RegisterPlayerContextMenu','RegisterFriendsListContextMenu','RegisterGuildRosterContextMenu','RegisterGroupListContextMenu'}) do
-    LibCustomMenu[method]=function(_,fn) callbacks[method]=fn end
-end
-function AddCustomMenuItem(label,callback) menu[#menu+1]={label=label,callback=callback} end
+-- Only the wheel's AddMenuEntry may be hooked (see test/sharing_interact.lua); a hook on
+-- anything else, such as the social menus, fails loudly.
+function ZO_PostHook(_,name) error('client code must not be hooked: '..tostring(name)) end
+function ZO_PreHook(_,name) error('client code must not be hooked: '..tostring(name)) end
 local wire={}
 local protocol={fields={}}
 function protocol:SetDisplayName() end
@@ -55,22 +43,39 @@ local handler={}
 function handler:SetDisplayName() end
 function handler:DeclareProtocol(id,name) check('protocol range',id>=0 and id<=511,true);self.id=id;self.name=name;return protocol end
 LibGroupBroadcast={}
-function LibGroupBroadcast:RegisterHandler() return handler end
+function LibGroupBroadcast:RegisterHandler(addonName,handlerName) handler.addonName=addonName;handler.handlerName=handlerName;return handler end
 function LibGroupBroadcast.CreateNumericField(label,options) return {label=label,options=options} end
 function LibGroupBroadcast.CreateStringField(label,options) return {label=label,options=options} end
-ui:InitDialog();ui:InitTransport();ui:InitMenus();ui:InitMenus()
+ui:InitDialog();ui:InitTransport()
+check('registered protocol id',handler.id,462)
+check('registered protocol name',handler.name,'PBsTranslateDictionary')
+check('handler is the add-on',handler.addonName,'PBsTranslate')
 check('bounded string payload',protocol.fields[6].options.maxLength,96)
 check('do not discard previous fragments',protocol.options.replaceQueuedMessages,false)
 check('avoid combat bandwidth',protocol.options.isRelevantInCombat,false)
-local list={};CHAT_MENU_GAMEPAD:PopulateOptionsList(list)
-check('original menu retained',list[1].original,true);check('one share entry after repeat init',#list,2)
-check('uses gamepad post-close callback',type(list[2].templateData.finishedCallback),'function')
-callbacks.RegisterPlayerContextMenu('@Peer','Peer Character')
-check('keyboard entry installed',#menu,1)
+-- The panel offers online group members other than you, and starts the share from a button.
+local memberRow,shareButton
+for _,row in ipairs(PanelRows) do
+    if row.label=='共有する相手' then memberRow=row end
+    if row.label=='選んだ相手に辞書を共有' then shareButton=row end
+end
+check('panel member list',memberRow~=nil and shareButton~=nil,true)
+local items=memberRow.items()
+check('member list excludes self',#items,1)
+check('member list names peer',memberRow.getFunction(),'@Peer')
+do
+    local size=GetGroupSize;GetGroupSize=function() return 0 end
+    check('empty group placeholder',memberRow.items()[1].data,nil)
+    memberRow.getFunction();wire={};shareButton.clickHandler()
+    check('no recipient sends nothing',#wire,0)
+    check('no recipient explained',ui.lastMessage,'同じグループのオンラインの相手を選んでください。')
+    GetGroupSize=size
+end
+memberRow.setFunction(nil,items[1].name,items[1])
 check('character name resolves to account',ui:Resolve('Peer Character'),'@Peer')
 check('self excluded',ui:Resolve('@PinkBanther'),nil)
 addon.sv.userWords={ham='n:ヴォレンドラング'}
-list[2].templateData.finishedCallback()
+shareButton.clickHandler()
 check('start needs confirmation',#wire,0)
 check('one saved entry displays one',shown.data.text:find('登録辞書 1件',1,true)~=nil,true)
 check('settings list also has one entry',#addon:WordListItems(),1)
@@ -164,7 +169,7 @@ remote:Start('@PinkBanther',{test='n:確認'});Pump()
 check('disabled protocol ignores requests',ui.session.active,nil)
 remote:Cancel();Pump();protocol.enabled=true
 local originalDeclare=handler.DeclareProtocol
-handler.DeclareProtocol=function() error('Protocol with ID 510 already exists') end
+handler.DeclareProtocol=function() error('Protocol with ID 462 already exists') end
 ui.protocol=nil;ui.transportAttempted=false
 check('protocol collision fails closed',ui:InitTransport(),false)
 check('collision detail retained',ui.transportError:find('already exists',1,true)~=nil,true)
