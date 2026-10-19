@@ -30,6 +30,18 @@
 PBsTranslate = PBsTranslate or {}
 local T = PBsTranslate
 
+-- Normal translations advance the collector in bounded slices without changing
+-- global GC tuning. A dictionary rebuild can request a completed collection to
+-- release its obsolete index (important with generational collectors). Hosts
+-- may restrict this API; failure disables explicit steps without breaking translation.
+local canStepGC = type(collectgarbage) == "function"
+function T.ReclaimTemporaryMemory(dictionaryRebuilt)
+	if canStepGC then
+		local ok = pcall(collectgarbage, dictionaryRebuilt and "collect" or "step", 128)
+		if not ok then canStepGC = false end
+	end
+end
+
 -- ---------------------------------------------------------------------------------------
 -- Byte-safe text helpers
 -- Lua's character classes (%a %w %s %u) and string.lower/upper ask the C library, and the C
@@ -150,6 +162,8 @@ T.lexicon = T.lexicon or {}
 T.cyrodiilLexicon = T.cyrodiilLexicon or {}
 T.cyrodiilPriority = T.cyrodiilPriority or false
 T.irregular = T.irregular or {}
+T.irregularPast = T.irregularPast or {}
+T.irregularParticiple = T.irregularParticiple or {}
 T.maxPhraseWords = T.maxPhraseWords or 1
 T.entryCount = T.entryCount or 0
 
@@ -237,6 +251,10 @@ local function Add(key, entry, dictionary)
 		end
 		if next(alts) then entry.alts = alts end
 	end
+	-- Definition order. The core vocabulary is defined first and chat slang last, so when
+	-- several English words share one Japanese, JaToEn.lua reads it back as the earliest.
+	T.defineSeq = (T.defineSeq or 0) + 1
+	entry.seq = T.defineSeq
 	dictionary[key] = entry
 	local words = 1
 	for _ in key:gmatch(" ") do
@@ -276,7 +294,14 @@ function T.DefineIrregular(block)
 		line = Trim((line:gsub("%-%-.*$", "")))
 		local form, base, inflection = line:match("^([^ \t=]+)[ \t]*=[ \t]*([^ \t]+)[ \t]+([^ \t]+)$")
 		if form then
-			T.irregular[T.Lower(form)] = { base = T.Lower(base), inflection = inflection }
+			form, base = T.Lower(form), T.Lower(base)
+			T.irregular[form] = { base = base, inflection = inflection }
+			-- The file lists the simple past before the participle (went, gone), which is how
+			-- JaToEn.lua tells them apart.
+			if inflection == "past" then
+				T.irregularPast[base] = T.irregularPast[base] or form
+				T.irregularParticiple[base] = form
+			end
 		end
 	end
 end
@@ -285,9 +310,35 @@ end
 -- removing one gives the shipped meaning back.
 T.userLexicon = T.userLexicon or {}
 
+-- Bound compiled user data as well as temporary analysis. Saved data is never
+-- deleted on failure; callers must reject an oversized edit/import atomically.
+T.USER_WORD_LIMIT = 2000
+T.USER_BYTE_LIMIT = 128 * 1024
+function T.CheckUserWordBudget(entries, replaceKey, replaceValue)
+	local count, bytes, cost = 0, 0, 0
+	local function include(k, v)
+		if type(k) ~= "string" or type(v) ~= "string" then return true end
+		count = count + 1; bytes = bytes + #k + #v
+		local pos = v:match("^([A-Za-z]+):")
+		cost = cost + (pos == "v" and 12 or pos == "a" and 6 or 1)
+		return #k <= 192 and #v <= 768 and count <= T.USER_WORD_LIMIT and cost <= T.USER_WORD_LIMIT and bytes <= T.USER_BYTE_LIMIT
+	end
+	for k, v in pairs(entries or {}) do
+		if k ~= replaceKey and not include(k, v) then return false end
+	end
+	if replaceKey and not include(replaceKey, replaceValue) then return false end
+	return true
+end
+local builtinPhraseWords
 function T.SetUserEntries(entries)
+	if not T.CheckUserWordBudget(entries) then return false, "budget" end
+	builtinPhraseWords = builtinPhraseWords or T.maxPhraseWords
+	T.maxPhraseWords = builtinPhraseWords
 	T.userLexicon = {}
+	local scanned = 0
 	for english, value in pairs(entries or {}) do
+		scanned = scanned + 1
+		if scanned % 64 == 0 then T.ReclaimTemporaryMemory() end
 		if type(english) == "string" and type(value) == "string" then
 			local pos, rest = value:match("^([A-Za-z]+):(.+)$")
 			if not pos then
@@ -303,6 +354,7 @@ function T.SetUserEntries(entries)
 			end
 		end
 	end
+	return true
 end
 
 local function Exact(key)

@@ -137,6 +137,30 @@ ClearChat()
 Speak(CHAT_CATEGORY_SAY, "@Someone", "こんにちは")
 check("Japanese left alone", #ChatWindow, 1)
 
+-- Mixed Japanese messages are never translated or replaced, even at 0% known.
+do
+	local savedOnly, savedKnown = addon.sv.translationOnly, addon.sv.minKnownPercent
+	addon.sv.minKnownPercent = 0
+	for _, only in ipairs({false, true}) do
+		addon:SetTranslationOnly(only, true)
+		for _, input in ipairs({"無理w", "無理ｗ", "ありがとうlol", "OKです", "thanks カナ", "thanks ｶﾅ", "thanks 𠮷", "|cFFFFFF無理|r w", "thank you |H1:item:123|h[剣]|h"}) do
+			ClearChat()
+			Speak(CHAT_CATEGORY_SAY, "@Someone", input)
+			check("mixed Japanese original only: " .. input, #ChatWindow, 1)
+			check("mixed Japanese unchanged: " .. input, ChatWindow[1], "[@Someone] " .. input)
+			local ja, reason = addon:TranslateLine(input)
+			check("mixed Japanese skipped", ja, nil)
+			check("mixed Japanese reason", reason, "contains Japanese")
+		end
+	end
+	addon:SetTranslationOnly(savedOnly, true)
+	addon.sv.minKnownPercent = savedKnown
+	for _, input in ipairs({"thank you", "thank you 😂", "thank you café", "thank you!"}) do
+		check("English still admitted: " .. input, addon:TranslateLine(input) ~= nil, true)
+	end
+end
+
+
 ClearChat()
 Speak(CHAT_CATEGORY_SAY, "@Someone", "Ich habe keine Zeit heute")
 check("German left alone", #ChatWindow, 1)
@@ -418,6 +442,58 @@ do
 	addon.formattedDecision = nil
 end
 
+-- ---- translation direction ----------------------------------------------------------
+do
+	check("direction defaults to English to Japanese", addon:Direction(), "en2ja")
+	local row
+	for _, r in ipairs(PanelRows) do
+		if r.label == GetString(SI_PBSTR_DIRECTION) then row = r end
+	end
+	check("panel has direction row", row ~= nil, true)
+	check("panel default is English to Japanese", row.default, GetString(SI_PBSTR_DIRECTION_TO_JA))
+	check("panel shows current direction", row.getFunction(), GetString(SI_PBSTR_DIRECTION_TO_JA))
+
+	row.setFunction(nil, row.items[2].name, row.items[2])
+	check("panel switches to Japanese to English", addon.sv.direction, "ja2en")
+	check("panel reads it back", row.getFunction(), GetString(SI_PBSTR_DIRECTION_TO_EN))
+	ClearChat()
+	Speak(CHAT_CATEGORY_PARTY, "@Someone", "正門に集合")
+	check("Japanese chat gets an English line", ChatWindow[2], addon:FormatTranslation("stack at fd"))
+	check("English line has its own prefix", ChatWindow[2]:find(GetString(SI_PBSTR_LINE_PREFIX_EN), 1, true) ~= nil, true)
+	ClearChat()
+	Speak(CHAT_CATEGORY_PARTY, "@Someone", "thank you")
+	check("English chat left alone in Japanese to English", #ChatWindow, 1)
+	ClearChat()
+	Speak(CHAT_CATEGORY_PARTY, "@Someone", "ホゲホゲ")
+	check("unreadable Japanese left alone", #ChatWindow, 1)
+	ClearChat()
+	SLASH_COMMANDS["/jp"]("thank you")
+	check("/jp still goes into Japanese", ChatWindow[1], addon:FormatTranslation("ありがとうございます", "en2ja"))
+	check("/jp keeps the Japanese prefix", ChatWindow[1]:find(GetString(SI_PBSTR_LINE_PREFIX), 1, true) ~= nil, true)
+	addon.sv.minKnownPercent = 100
+	ClearChat()
+	Speak(CHAT_CATEGORY_PARTY, "@Someone", "こんにちは、ホゲホゲ")
+	check("known-word threshold applies to Japanese", #ChatWindow, 1)
+	addon.sv.minKnownPercent = 0
+
+	SLASH_COMMANDS["/pbtr"]("mode en2ja")
+	check("command switches back", addon:Direction(), "en2ja")
+	SLASH_COMMANDS["/pbtr"]("mode ja")
+	check("command short form ja", addon:Direction(), "en2ja")
+	SLASH_COMMANDS["/pbtr"]("mode ja2en")
+	check("command switches to Japanese to English", addon:Direction(), "ja2en")
+	ClearChat()
+	SLASH_COMMANDS["/pbtr"]("mode sideways")
+	check("bad direction refused", addon:Direction(), "ja2en")
+	check("bad direction explained", ChatWindow[1]:find(GetString(SI_PBSTR_ERROR_DIRECTION), 1, true) ~= nil, true)
+	addon.sv.direction = "garbage"
+	check("unknown saved value falls back", addon:Direction(), "en2ja")
+	SLASH_COMMANDS["/pbtr"]("mode en2ja")
+	ClearChat()
+	Speak(CHAT_CATEGORY_PARTY, "@Someone", "正門に集合")
+	check("Japanese left alone again", #ChatWindow, 1)
+end
+
 -- ---- dictionary rows on the settings panel -------------------------------------------
 do
 	local function Row(label)
@@ -465,7 +541,7 @@ do
 	Pick(pos, GetString(SI_PBSTR_POS_ICHIDAN))
 	add.clickHandler()
 	check("panel saves verb class", addon.sv.userWords["yeet"], "v:投げる/1")
-	check("panel verb conjugates", T.Translate("I yeeted it"), "私はそれを投げました")
+	check("panel verb conjugates", T.Translate("I yeeted it"), "それを投げました")
 	check("list shows plain Japanese", list.getFunction(), "yeet = 投げる")
 
 	check("list pick", Pick(list, "raid night = レイドの夜"), true)
@@ -496,7 +572,7 @@ for _, inside in ipairs({ false, true, false, true, false }) do
 	check(label .. " dragon", T.Translate("dragon"), inside and "ドラゴンクロー砦" or "ドラゴン")
 	check(label .. " mine pronoun", T.Translate("it is mine"), "それは私のものです")
 	check(label .. " keep abbreviation fallback", T.Translate("bm fd"), "ブラッドメイン砦の正門")
-	check(label .. " verb inflection", T.Translate("we pushed"), inside and "私たちは攻めました" or "私たちは押しました")
+	check(label .. " verb inflection", T.Translate("we pushed"), inside and "攻めました" or "押しました")
 	check(label .. " dictionary count stable", T.entryCount, entryCount)
 	ClearChat()
 	Speak(CHAT_CATEGORY_PARTY, "@Someone", "warden")

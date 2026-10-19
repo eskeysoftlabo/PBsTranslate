@@ -21,13 +21,13 @@ for _,cyro in ipairs({false,true}) do
 end
 local context={
  {'afc, bbol','操作から離れています、後でログインします'},
- {'I need a freebie','私は無料の品が必要です'},
+ {'I need a freebie','無料の品が必要です'},
  {'dont pubstomp','野良チームを圧倒しないでください'},
- {'we should pubstomp','私たちは野良チームを圧倒するべきです'},
+ {'we should pubstomp','野良チームを圧倒するべきです'},
  {'2ez, ta','楽勝、改めてありがとう'},
  {'tc, nntr','元気でね、返事は不要です'},
- {'I want a freebie','私は無料の品が欲しいです'},
- {'I need a qrg','私は簡易ガイドが必要です'},
+ {'I want a freebie','無料の品が欲しいです'},
+ {'I need a qrg','簡易ガイドが必要です'},
 }
 for _,c in ipairs(context) do check(T.Translate(c[1])==c[2],'context '..c[1]) end
 T.SetUserEntries({afc='x:ユーザー指定の離席'})

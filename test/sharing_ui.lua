@@ -174,4 +174,22 @@ ui.protocol=nil;ui.transportAttempted=false
 check('protocol collision fails closed',ui:InitTransport(),false)
 check('collision detail retained',ui.transportError:find('already exists',1,true)~=nil,true)
 handler.DeclareProtocol=originalDeclare;ui.protocol=protocol
+-- A combined dictionary must fit even when each transfer fits the wire limit.
+local full={}
+for i=1,PBsTranslate.USER_WORD_LIMIT do full['custom '..i]='n:項目'..i end
+addon.sv.userWords=full;addon:ApplyUserWords()
+local saved=addon.sv.userWords
+local oldBackup=addon.sv.shareBackup
+local review={peer='@Peer',words={overflow='n:超過'}}
+ui.session.review=review
+ui:Import(review,false)
+check('oversize import leaves dictionary untouched',addon.sv.userWords,saved)
+check('oversize import leaves backup untouched',addon.sv.shareBackup,oldBackup)
+check('oversize import remains reviewable',ui.session.review,review)
+local key=addon:StoreUserWord('overflow','n:超過')
+check('oversize manual edit rejected',key,nil)
+check('oversize manual edit not saved',addon.sv.userWords.overflow,nil)
+key=addon:StoreUserWord('custom 1','n:修正')
+check('replacement at entry limit allowed',key,'custom 1')
+ui.session.review=nil;addon.sv.userWords={};addon:ApplyUserWords()
 print('sharing UI: '..checks..' checks passed')

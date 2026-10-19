@@ -88,9 +88,9 @@ for _, case in ipairs(CASES) do
 	check(case[1] .. " fully understood", #unknown, 0)
 end
 do
-	local english, unknown = T.TranslateJaToEn("ケーキを食べたい")
+	local english, unknown = T.TranslateJaToEn("ホゲホゲ")
 	check("unknown sentence gives nothing", english, "")
-	check("unknown words reported", table.concat(unknown, "/"), "ケーキ/食べたい")
+	check("unknown words reported", table.concat(unknown, "/"), "ホゲホゲ")
 end
 
 -- ---- /en opens the box with the English -----------------------------------------------
@@ -109,16 +109,16 @@ check("/en box holds the English", edit.text, "chal fd lit")
 check("/en schedules nothing after opening", #timers, 0)
 
 Reset()
-SLASH_COMMANDS["/en"]("ケーキを食べたい")
+SLASH_COMMANDS["/en"]("ホゲホゲ")
 RunTimers()
 check("untranslatable opens with 翻訳不可", chat.calls[1] and chat.calls[1].text, "翻訳不可")
-check("untranslatable words listed", Lines():find("ケーキ / 食べたい", 1, true) ~= nil, true)
+check("untranslatable words listed", Lines():find("未対応の語: ホゲホゲ", 1, true) ~= nil, true)
 
 Reset()
-SLASH_COMMANDS["/en"]("ありがとう、ケーキ")
+SLASH_COMMANDS["/en"]("ありがとう、ホゲホゲ")
 RunTimers()
 check("partly translated opens with the English part", chat.calls[1] and chat.calls[1].text, "ty")
-check("partly translated lists the rest", Lines():find("未対応の語: ケーキ", 1, true) ~= nil, true)
+check("partly translated lists the rest", Lines():find("未対応の語: ホゲホゲ", 1, true) ~= nil, true)
 
 -- A box still open after the wait is left alone, not polled or reopened.
 Reset()
@@ -215,7 +215,7 @@ check("unknown step does nothing", #chat.calls, 0)
 Reset()
 SLASH_COMMANDS["/en"]("probe")
 check("probe reports the locale", Lines():find("locale: E3 letter=", 1, true) ~= nil, true)
-check("probe reports the sample", Lines():find("untranslatable sample: english=empty pieces=2 valid=true", 1, true) ~= nil, true)
+check("probe reports the sample", Lines():find("untranslatable sample: english=empty pieces=1 valid=true", 1, true) ~= nil, true)
 check("probe opens nothing", #chat.calls, 0)
 
 -- ---- a console-like locale --------------------------------------------------------------
@@ -229,11 +229,11 @@ if os and os.setlocale and os.setlocale("en_US.ISO8859-1", "ctype") and string.c
 		for _, piece in ipairs(unknown) do valid = valid and T.IsValidUTF8(piece) end
 		check("Latin-1: valid UTF-8 for " .. text, valid, true)
 	end
-	check("Latin-1: untranslatable stays empty", (T.TranslateJaToEn("ケーキを食べたい")), "")
+	check("Latin-1: untranslatable stays empty", (T.TranslateJaToEn("ホゲホゲ")), "")
 	check("Latin-1: callout still translates", (T.TranslateJaToEn("チャルマン砦の正門が攻撃されている")), "chal fd lit")
 
 	Reset()
-	SLASH_COMMANDS["/en"]("ケーキを食べたい")
+	SLASH_COMMANDS["/en"]("ホゲホゲ")
 	RunTimers()
 	check("Latin-1: untranslatable opens with 翻訳不可", chat.calls[1] and chat.calls[1].text, "翻訳不可")
 	check("Latin-1: every chat line is valid UTF-8", T.IsValidUTF8(Lines()), true)
